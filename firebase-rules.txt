@@ -11,29 +11,33 @@ service cloud.firestore {
     
     // User document rules
     match /users/{userId} {
-      // Allow users to write to their own document
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
       
-      // Allow users to update friends arrays in other users' documents
+      // Allow users to update their own documents freely
+      allow update: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow other users to update only the friends array - both for adding and removing
       allow update: if request.auth != null && 
-                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends']) &&
-                     request.resource.data.friends.hasAll(resource.data.friends);
+                      request.auth.uid != userId &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends']);
+      
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     
     // Friend requests rules
     match /friendRequests/{requestId} {
-      // Allow users to create friend requests
+      allow read: if request.auth != null;
+      
+      // Allow creating a friend request if the authenticated user is the sender
       allow create: if request.auth != null && 
                      request.resource.data.senderId == request.auth.uid;
       
-      // Allow users to update friend requests they're involved with
-      allow update: if request.auth != null && 
-                     (resource.data.senderId == request.auth.uid || 
-                      resource.data.receiverId == request.auth.uid);
-      
-      // Allow users to delete their own requests
-      allow delete: if request.auth != null && 
-                     resource.data.senderId == request.auth.uid;
+      // Allow updating or deleting a friend request if you're the sender or receiver
+      allow update, delete: if request.auth != null && (
+        resource.data.senderId == request.auth.uid || 
+        resource.data.receiverId == request.auth.uid
+      );
     }
   }
 }

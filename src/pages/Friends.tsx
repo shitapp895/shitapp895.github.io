@@ -12,7 +12,8 @@ import {
   arrayRemove, 
   getDoc,
   setDoc,
-  Timestamp
+  Timestamp,
+  writeBatch
 } from 'firebase/firestore'
 import { firestore } from '../firebase/config'
 
@@ -391,25 +392,118 @@ const Friends = () => {
       setError('')
       setSuccess('')
       
-      // Remove user from current user's friends list
-      await updateDoc(doc(firestore, 'users', currentUser.uid), {
-        friends: arrayRemove(user.uid)
-      })
+      // Get document references
+      const currentUserDocRef = doc(firestore, 'users', currentUser.uid);
+      const otherUserDocRef = doc(firestore, 'users', user.uid);
       
-      // Remove current user from the other user's friends list
-      await updateDoc(doc(firestore, 'users', user.uid), {
-        friends: arrayRemove(currentUser.uid)
-      })
+      // Make sure other user exists before trying to update
+      const otherUserDoc = await getDoc(otherUserDocRef);
+      if (!otherUserDoc.exists()) {
+        throw new Error(`User document for ${user.displayName} not found`);
+      }
+      
+      console.log(`Attempting to remove friendship between ${currentUser.uid} and ${user.uid}`);
+      
+      // First, update the current user's document
+      console.log("Updating current user's document...");
+      await updateDoc(currentUserDocRef, {
+        friends: arrayRemove(user.uid)
+      });
+      console.log("Successfully updated current user's document");
+      
+      // Important: Ensure the other user's document is updated as well
+      console.log("Updating other user's document...");
+      let otherUserUpdateSuccessful = false;
+      
+      try {
+        await updateDoc(otherUserDocRef, {
+          friends: arrayRemove(currentUser.uid)
+        });
+        otherUserUpdateSuccessful = true;
+        console.log("Successfully updated other user's document");
+      } catch (updateError: any) {
+        console.error('Failed to update other user document:', updateError);
+        console.error('Error details:', updateError.code, updateError.message);
+        
+        // Try a different approach with security rules in mind
+        try {
+          console.log("Trying alternative update approach...");
+          // Get the other user's current data
+          const otherUserData = otherUserDoc.data();
+          const currentFriends = otherUserData.friends || [];
+          
+          // If the current user is in their friends list
+          if (currentFriends.includes(currentUser.uid)) {
+            // Create a new friends array without the current user
+            const newFriends = currentFriends.filter((friendId: string) => friendId !== currentUser.uid);
+            
+            // Update with the new array instead of using arrayRemove
+            await updateDoc(otherUserDocRef, {
+              friends: newFriends
+            });
+            otherUserUpdateSuccessful = true;
+            console.log("Successfully updated other user's document with alternative approach");
+          } else {
+            console.log("Current user not found in other user's friends list - no update needed");
+            otherUserUpdateSuccessful = true; // No update needed, so consider it successful
+          }
+        } catch (alternativeUpdateError: any) {
+          console.error('Alternative update approach also failed:', alternativeUpdateError);
+          console.error('Error details:', alternativeUpdateError.code, alternativeUpdateError.message);
+        }
+      }
       
       // Update local friends list
-      setFriends(prev => prev.filter(f => f.uid !== user.uid))
+      setFriends(prev => prev.filter(f => f.uid !== user.uid));
       
-      setSuccess(`${user.displayName} removed from your friends`)
+      if (otherUserUpdateSuccessful) {
+        setSuccess(`${user.displayName} removed from your friends`);
+      } else {
+        setSuccess(`${user.displayName} removed from your friends, but there was an issue updating their friends list. They may still see you as a friend.`);
+      }
     } catch (err: any) {
-      console.error('Error removing friend:', err)
-      setError('Failed to remove friend')
+      console.error('Error removing friend:', err);
+      setError('Failed to remove friend: ' + (err.message || 'Unknown error'));
+      
+      // Attempt to verify and fix any inconsistency
+      try {
+        // Check if the friendship is in an inconsistent state
+        const currentUserDoc = await getDoc(doc(firestore, 'users', currentUser.uid));
+        const otherUserDoc = await getDoc(doc(firestore, 'users', user.uid));
+        
+        if (currentUserDoc.exists() && otherUserDoc.exists()) {
+          const currentUserData = currentUserDoc.data();
+          const otherUserData = otherUserDoc.data();
+          
+          const currentUserHasFriend = currentUserData.friends && currentUserData.friends.includes(user.uid);
+          const otherUserHasFriend = otherUserData.friends && otherUserData.friends.includes(currentUser.uid);
+          
+          // If there's an inconsistency, try to fix it
+          if (currentUserHasFriend !== otherUserHasFriend) {
+            console.log('Detected inconsistent friendship state, attempting to fix...');
+            
+            if (currentUserHasFriend) {
+              // Remove from current user if still there
+              await updateDoc(doc(firestore, 'users', currentUser.uid), {
+                friends: arrayRemove(user.uid)
+              });
+            }
+            
+            if (otherUserHasFriend) {
+              // Remove from other user if still there
+              await updateDoc(doc(firestore, 'users', user.uid), {
+                friends: arrayRemove(currentUser.uid)
+              });
+            }
+            
+            setSuccess('Fixed inconsistent friendship state');
+          }
+        }
+      } catch (fixErr) {
+        console.error('Error attempting to fix friendship inconsistency:', fixErr);
+      }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -421,34 +515,76 @@ const Friends = () => {
       setError('')
       setSuccess('')
       
-      // Update the request status to accepted
+      console.log('Accepting friend request:', request.id, 'from:', request.sender.displayName);
+      
+      // 1. Update the request status to accepted
       const requestRef = doc(firestore, 'friendRequests', request.id)
       await updateDoc(requestRef, {
         status: 'accepted'
       })
+      console.log('Successfully updated friend request status to accepted');
       
-      // Add each user to the other's friends list
+      // Get references to both user documents
       const currentUserRef = doc(firestore, 'users', currentUser.uid)
       const senderRef = doc(firestore, 'users', request.sender.uid)
       
-      await updateDoc(currentUserRef, {
-        friends: arrayUnion(request.sender.uid)
-      })
+      // Check if current user document exists and get its data
+      const currentUserDoc = await getDoc(currentUserRef);
+      if (!currentUserDoc.exists()) {
+        throw new Error("Your user document does not exist");
+      }
+      const currentUserData = currentUserDoc.data();
       
-      await updateDoc(senderRef, {
-        friends: arrayUnion(currentUser.uid)
-      })
+      // Check if sender document exists and get its data
+      const senderDoc = await getDoc(senderRef);
+      if (!senderDoc.exists()) {
+        throw new Error(`User document for ${request.sender.displayName} not found`);
+      }
+      const senderData = senderDoc.data();
       
-      // Update local state
-      setFriends(prev => [...prev, request.sender])
-      setReceivedRequests(prev => prev.filter(r => r.id !== request.id))
+      // Create a batch for atomic updates
+      const batch = writeBatch(firestore);
       
-      setSuccess(`You are now friends with ${request.sender.displayName}!`)
+      // Check if the friendship already exists on either side
+      const currentUserFriends = currentUserData.friends || [];
+      const senderFriends = senderData.friends || [];
+      
+      // 2. Update current user's friends list if needed
+      if (!currentUserFriends.includes(request.sender.uid)) {
+        console.log('Adding sender to current user friends list');
+        batch.update(currentUserRef, {
+          friends: arrayUnion(request.sender.uid)
+        });
+      } else {
+        console.log('Sender already in current user friends list');
+      }
+      
+      // 3. Update sender's friends list if needed
+      if (!senderFriends.includes(currentUser.uid)) {
+        console.log('Adding current user to sender friends list');
+        batch.update(senderRef, {
+          friends: arrayUnion(currentUser.uid)
+        });
+      } else {
+        console.log('Current user already in sender friends list');
+      }
+      
+      // 4. Commit the batch
+      await batch.commit();
+      console.log('Successfully updated both user documents');
+      
+      // 5. Update local state
+      if (!currentUserFriends.includes(request.sender.uid)) {
+        setFriends(prev => [...prev, request.sender]);
+      }
+      setReceivedRequests(prev => prev.filter(r => r.id !== request.id));
+      
+      setSuccess(`You are now friends with ${request.sender.displayName}!`);
     } catch (err: any) {
-      console.error('Error accepting friend request:', err)
-      setError('Failed to accept friend request: ' + (err.message || 'Unknown error'))
+      console.error('Error accepting friend request:', err);
+      setError('Failed to accept friend request: ' + (err.message || 'Unknown error'));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
   
