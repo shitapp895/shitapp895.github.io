@@ -31,6 +31,10 @@ interface AuthContextType {
   updateUserStatus: (isShitting: boolean) => Promise<void>
 }
 
+interface AuthProviderProps {
+  children: ReactNode
+}
+
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function useAuth() {
@@ -39,10 +43,6 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
-}
-
-interface AuthProviderProps {
-  children: ReactNode
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {

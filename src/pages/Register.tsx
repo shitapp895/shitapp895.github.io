@@ -118,7 +118,7 @@ const Register = () => {
               className="btn btn-primary w-full"
               disabled={loading}
             >
-              {loading ? 'Creating Account...' : 'Register'}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
           
