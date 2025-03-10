@@ -6,7 +6,7 @@ import { resolve } from 'path'
 export default defineConfig({
   root: process.cwd(),
   plugins: [react()],
-  base: '/ShitApp/', // For GitHub Pages deployment
+  base: '/', // For GitHub Pages deployment at root domain
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
