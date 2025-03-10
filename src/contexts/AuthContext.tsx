@@ -8,7 +8,7 @@ import {
   updateProfile
 } from 'firebase/auth'
 import { doc, setDoc, getDoc } from 'firebase/firestore'
-import { ref, set, onValue } from 'firebase/database'
+import { ref, set, onValue, onDisconnect } from 'firebase/database'
 import { auth, firestore, database } from '../firebase/config'
 
 interface UserData {
@@ -37,6 +37,14 @@ interface AuthProviderProps {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+// Create a session ID for this browser tab
+const sessionId = Math.random().toString(36).substring(2, 15)
+
+// Store the session ID in sessionStorage
+if (typeof window !== 'undefined') {
+  sessionStorage.setItem('sessionId', sessionId)
+}
+
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {
@@ -51,93 +59,135 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
 
   async function register(email: string, password: string, displayName: string) {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    
-    // Update profile
-    await updateProfile(userCredential.user, { displayName })
-    
-    // Create user document in Firestore
-    await setDoc(doc(firestore, 'users', userCredential.user.uid), {
-      uid: userCredential.user.uid,
-      email,
-      displayName,
-      photoURL: null,
-      createdAt: Date.now(),
-      friends: []
-    })
-    
-    // Set initial online status in Realtime Database
-    await set(ref(database, `status/${userCredential.user.uid}`), {
-      isOnline: true,
-      isShitting: false,
-      lastActive: Date.now()
-    })
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      
+      // Update profile
+      await updateProfile(userCredential.user, { displayName })
+      
+      // Create user document in Firestore
+      await setDoc(doc(firestore, 'users', userCredential.user.uid), {
+        uid: userCredential.user.uid,
+        email,
+        displayName,
+        photoURL: null,
+        createdAt: Date.now(),
+        friends: []
+      })
+      
+      // Set initial online status in Realtime Database
+      const statusRef = ref(database, `status/${userCredential.user.uid}`)
+      await set(statusRef, {
+        isOnline: true,
+        isShitting: false,
+        lastActive: Date.now(),
+        sessions: { [sessionId]: true }
+      })
+      
+      // Set up onDisconnect to update status when tab closes
+      onDisconnect(ref(database, `status/${userCredential.user.uid}/sessions/${sessionId}`))
+        .remove()
+    } catch (error) {
+      console.error("Registration error:", error)
+      throw error
+    }
   }
 
   async function login(email: string, password: string) {
-    await signInWithEmailAndPassword(auth, email, password)
-    
-    // Update online status
-    if (currentUser) {
-      await set(ref(database, `status/${currentUser.uid}`), {
-        isOnline: true,
-        isShitting: false,
-        lastActive: Date.now()
-      })
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+    } catch (error) {
+      console.error("Login error:", error)
+      throw error
     }
   }
 
   async function logout() {
-    // Update online status before signing out
-    if (currentUser) {
-      await set(ref(database, `status/${currentUser.uid}`), {
-        isOnline: false,
-        isShitting: false,
-        lastActive: Date.now()
-      })
+    try {
+      // Update online status before signing out
+      if (currentUser) {
+        const statusRef = ref(database, `status/${currentUser.uid}/sessions/${sessionId}`)
+        await set(statusRef, null)
+      }
+      
+      await signOut(auth)
+    } catch (error) {
+      console.error("Logout error:", error)
+      throw error
     }
-    
-    await signOut(auth)
   }
 
   async function updateUserStatus(isShitting: boolean) {
     if (!currentUser) return
     
-    await set(ref(database, `status/${currentUser.uid}`), {
-      isOnline: true,
-      isShitting,
-      lastActive: Date.now()
-    })
+    try {
+      const userStatusRef = ref(database, `status/${currentUser.uid}`)
+      const snapshot = await getDoc(doc(firestore, 'users', currentUser.uid))
+      
+      await set(userStatusRef, {
+        isOnline: true,
+        isShitting,
+        lastActive: Date.now(),
+        sessions: { [sessionId]: true }
+      })
+    } catch (error) {
+      console.error("Status update error:", error)
+    }
   }
 
+  // Handle auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user)
       
       if (user) {
-        // Get user data from Firestore
-        await getDoc(doc(firestore, 'users', user.uid))
-        
-        // Listen to user status in Realtime Database
-        const statusRef = ref(database, `status/${user.uid}`)
-        onValue(statusRef, (snapshot) => {
-          const status = snapshot.val() || { isOnline: false, isShitting: false, lastActive: Date.now() }
+        try {
+          // Get user data from Firestore
+          const userDoc = await getDoc(doc(firestore, 'users', user.uid))
           
-          setUserData({
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            ...status
+          // Listen to user status in Realtime Database
+          const statusRef = ref(database, `status/${user.uid}`)
+          
+          // Set up this session
+          await set(ref(database, `status/${user.uid}/sessions/${sessionId}`), true)
+          
+          // Set up onDisconnect to remove this session when tab closes
+          onDisconnect(ref(database, `status/${user.uid}/sessions/${sessionId}`))
+            .remove()
+          
+          // Listen for status changes
+          onValue(statusRef, (snapshot) => {
+            const status = snapshot.val() || { 
+              isOnline: false, 
+              isShitting: false, 
+              lastActive: Date.now(),
+              sessions: {}
+            }
+            
+            // Determine if user is online based on any active sessions
+            const hasActiveSessions = status.sessions && Object.keys(status.sessions).length > 0
+            
+            setUserData({
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              isOnline: hasActiveSessions,
+              isShitting: status.isShitting || false,
+              lastActive: status.lastActive || Date.now()
+            })
           })
-        })
-        
-        // Update online status
-        await set(statusRef, {
-          isOnline: true,
-          isShitting: false,
-          lastActive: Date.now()
-        })
+          
+          // Update online status
+          await set(ref(database, `status/${user.uid}`), {
+            isOnline: true,
+            isShitting: false,
+            lastActive: Date.now(),
+            sessions: { [sessionId]: true }
+          })
+        } catch (error) {
+          console.error("Error setting up user data:", error)
+        }
       } else {
         setUserData(null)
       }
@@ -145,7 +195,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false)
     })
     
-    return unsubscribe
+    // Handle beforeunload event to clean up session
+    const handleBeforeUnload = () => {
+      if (currentUser) {
+        // Use synchronous API for beforeunload
+        const statusRef = ref(database, `status/${currentUser.uid}/sessions/${sessionId}`)
+        set(statusRef, null)
+      }
+    }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      unsubscribe()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
   }, [])
 
   const value = {
