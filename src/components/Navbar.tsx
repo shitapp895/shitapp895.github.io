@@ -1,15 +1,16 @@
-import { Link } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { FaToilet, FaUser, FaUserFriends, FaSignOutAlt } from 'react-icons/fa'
+import { FaToilet, FaUser, FaUserFriends, FaSignOutAlt } from 'react-icons/fa';
+import { Link } from 'react-router-dom';
+
+import { useAuth } from '../contexts/AuthContext';
 
 const Navbar = () => {
-  const { userData, logout, updateUserStatus } = useAuth()
+  const { userData, logout, updateUserStatus } = useAuth();
 
   const handleShitToggle = () => {
     if (userData) {
-      updateUserStatus(!userData.isShitting)
+      updateUserStatus(!userData.isShitting);
     }
-  }
+  };
 
   return (
     <nav className="bg-white dark:bg-slate-800 shadow-md">
@@ -21,12 +22,10 @@ const Navbar = () => {
           </Link>
 
           <div className="flex items-center space-x-6">
-            <button 
+            <button
               onClick={handleShitToggle}
               className={`flex items-center space-x-1 px-3 py-1 rounded-full ${
-                userData?.isShitting 
-                  ? 'bg-accent text-white' 
-                  : 'bg-gray-200 dark:bg-slate-700'
+                userData?.isShitting ? 'bg-accent text-white' : 'bg-gray-200 dark:bg-slate-700'
               }`}
             >
               <FaToilet />
@@ -37,13 +36,13 @@ const Navbar = () => {
               <Link to="/friends" className="text-gray-600 dark:text-gray-300 hover:text-primary">
                 <FaUserFriends className="text-xl" />
               </Link>
-              
+
               <Link to="/profile" className="text-gray-600 dark:text-gray-300 hover:text-primary">
                 <FaUser className="text-xl" />
               </Link>
-              
-              <button 
-                onClick={() => logout()} 
+
+              <button
+                onClick={() => logout()}
                 className="text-gray-600 dark:text-gray-300 hover:text-primary"
               >
                 <FaSignOutAlt className="text-xl" />
@@ -53,7 +52,7 @@ const Navbar = () => {
         </div>
       </div>
     </nav>
-  )
-}
+  );
+};
 
-export default Navbar 
+export default Navbar;

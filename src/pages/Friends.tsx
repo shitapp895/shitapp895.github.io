@@ -234,7 +234,6 @@ const Friends = () => {
       // If no results by email, try display name search
       if (results.length === 0) {
         // Search for users by display name (case insensitive if possible)
-        const searchTermLower = searchTerm.toLowerCase()
         const usersQuery = query(
           collection(firestore, 'users'),
           where('displayName', '>=', searchTerm),
