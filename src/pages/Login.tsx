@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { FaToilet } from 'react-icons/fa';
 import { Link, Navigate } from 'react-router-dom';
-
 import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {

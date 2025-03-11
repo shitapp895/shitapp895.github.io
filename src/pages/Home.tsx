@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
-import { FaToilet, FaGamepad } from 'react-icons/fa'
+import { useState } from 'react';
+import { FaToilet, FaGamepad } from 'react-icons/fa';
+import { useAuth } from '../contexts/AuthContext';
 
 // Mini-games
 const games = [
@@ -8,11 +8,11 @@ const games = [
   { id: 'rockpaper', name: 'Rock Paper Scissors', icon: '✂️🪨📄' },
   { id: 'wordle', name: 'Toilet Wordle', icon: '🔤' },
   { id: 'hangman', name: 'Hangman', icon: '👨‍🦯' },
-]
+];
 
 const Home = () => {
-  const { userData } = useAuth()
-  const [selectedGame, setSelectedGame] = useState<string | null>(null)
+  const { userData } = useAuth();
+  const [selectedGame, setSelectedGame] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
@@ -28,34 +28,34 @@ const Home = () => {
             </p>
           </div>
         </div>
-        
+
         <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg">
           <div className="flex items-center space-x-2 mb-2">
             <FaToilet className="text-primary" />
             <h2 className="font-semibold">ShitApp Status</h2>
           </div>
           <p className="text-sm">
-            {userData?.isShitting 
+            {userData?.isShitting
               ? "You're currently in shitting mode. You can now play mini-games with other friends who are also shitting!"
               : "You're not in shitting mode. Toggle your status in the navbar when you're taking a bathroom break to connect with friends!"}
           </p>
         </div>
       </div>
-      
+
       <div className="card">
         <div className="flex items-center space-x-2 mb-4">
           <FaGamepad className="text-primary" />
           <h2 className="text-xl font-semibold">Mini Games</h2>
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {games.map(game => (
             <button
               key={game.id}
               onClick={() => setSelectedGame(game.id)}
               className={`p-4 rounded-lg border-2 transition-all ${
-                selectedGame === game.id 
-                  ? 'border-primary bg-primary/10' 
+                selectedGame === game.id
+                  ? 'border-primary bg-primary/10'
                   : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'
               }`}
               disabled={!userData?.isShitting}
@@ -63,14 +63,12 @@ const Home = () => {
               <div className="text-2xl mb-2">{game.icon}</div>
               <h3 className="font-medium">{game.name}</h3>
               {!userData?.isShitting && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Available when shitting
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Available when shitting</p>
               )}
             </button>
           ))}
         </div>
-        
+
         {!userData?.isShitting && (
           <div className="mt-4 p-3 bg-gray-100 dark:bg-slate-700 rounded text-sm text-center">
             Toggle your status to "Shitting" to play mini-games with friends!
@@ -78,7 +76,7 @@ const Home = () => {
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Home 
+export default Home;
