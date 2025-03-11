@@ -1,5 +1,3 @@
-import { FaGithub } from 'react-icons/fa';
-
 const Footer = () => {
   return (
     <footer className="bg-white dark:bg-slate-800 shadow-inner py-4">
