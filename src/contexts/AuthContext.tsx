@@ -6,11 +6,24 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth';
-import { ref, set, onValue, onDisconnect, get } from 'firebase/database';
+import { ref, set, onValue, onDisconnect, get, push, serverTimestamp } from 'firebase/database';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 import { auth, firestore, database } from '../firebase/config';
+
+interface ShitEvent {
+  startTime: number;
+  endTime: number | null;
+  duration: number | null;
+  date: string;
+}
+
+interface ShitStats {
+  totalShits: number;
+  shitEvents: ShitEvent[];
+  lastShitDate: string | null;
+}
 
 interface UserData {
   uid: string;
@@ -20,6 +33,7 @@ interface UserData {
   isOnline: boolean;
   isShitting: boolean;
   lastActive: number;
+  shitStats: ShitStats;
 }
 
 interface AuthContextType {
@@ -31,6 +45,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserStatus: (isShitting: boolean) => Promise<void>;
+  getAverageShitsPerDay: () => number;
+  getFriendsCount: () => number;
 }
 
 interface AuthProviderProps {
@@ -140,12 +156,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Update existing status
         const currentStatus = snapshot.val() || {};
         const sessions = currentStatus.sessions || {};
+        
+        // Track shit events
+        if (isShitting !== currentStatus.isShitting) {
+          if (isShitting) {
+            // Starting a shit session
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            const shitEventRef = ref(database, `shitEvents/${currentUser.uid}`);
+            const newShitEventRef = push(shitEventRef);
+            
+            await set(newShitEventRef, {
+              startTime: Date.now(),
+              endTime: null,
+              duration: null,
+              date: today
+            });
+            
+            // Store the event key in the session for later reference
+            await set(ref(database, `status/${currentUser.uid}/currentShitEventId`), newShitEventRef.key);
+          } else if (currentStatus.isShitting && currentStatus.currentShitEventId) {
+            // Ending a shit session
+            const shitEventRef = ref(database, `shitEvents/${currentUser.uid}/${currentStatus.currentShitEventId}`);
+            const shitEventSnapshot = await get(shitEventRef);
+            
+            if (shitEventSnapshot.exists()) {
+              const shitEvent = shitEventSnapshot.val();
+              const endTime = Date.now();
+              const duration = endTime - shitEvent.startTime;
+              
+              await set(shitEventRef, {
+                ...shitEvent,
+                endTime,
+                duration
+              });
+              
+              // Update total shits count
+              const userShitStatsRef = ref(database, `shitStats/${currentUser.uid}`);
+              const userShitStatsSnapshot = await get(userShitStatsRef);
+              
+              if (userShitStatsSnapshot.exists()) {
+                const shitStats = userShitStatsSnapshot.val();
+                await set(userShitStatsRef, {
+                  ...shitStats,
+                  totalShits: (shitStats.totalShits || 0) + 1,
+                  lastShitDate: shitEvent.date
+                });
+              } else {
+                await set(userShitStatsRef, {
+                  totalShits: 1,
+                  lastShitDate: shitEvent.date
+                });
+              }
+              
+              // Clear the current event ID
+              await set(ref(database, `status/${currentUser.uid}/currentShitEventId`), null);
+            }
+          }
+        }
 
         await set(statusRef, {
           isOnline: true,
           isShitting,
           lastActive: Date.now(),
           sessions: { ...sessions, [sessionId]: true },
+          currentShitEventId: isShitting ? currentStatus.currentShitEventId : null
         });
       } else {
         // Create new status
@@ -154,6 +228,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           isShitting,
           lastActive: Date.now(),
           sessions: { [sessionId]: true },
+          currentShitEventId: null
         });
       }
 
@@ -163,6 +238,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Status update error:', error);
       setError(error.message || 'Failed to update status. Please try again.');
     }
+  }
+
+  // Function to get average shits per day
+  function getAverageShitsPerDay() {
+    if (!userData || !currentUser) return 0;
+    
+    // Get shit events from the database
+    const shitStatsRef = ref(database, `shitStats/${currentUser.uid}`);
+    let totalShits = 0;
+    let uniqueDays = new Set();
+    
+    onValue(shitStatsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const shitStats = snapshot.val();
+        totalShits = shitStats.totalShits || 0;
+      }
+    });
+    
+    const shitEventsRef = ref(database, `shitEvents/${currentUser.uid}`);
+    onValue(shitEventsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const events = snapshot.val();
+        Object.values(events).forEach((event: any) => {
+          if (event.date) {
+            uniqueDays.add(event.date);
+          }
+        });
+      }
+    });
+    
+    const dayCount = uniqueDays.size || 1; // Avoid division by zero
+    return totalShits / dayCount;
+  }
+  
+  // Function to get friends count
+  function getFriendsCount() {
+    if (!userData) return 0;
+    
+    // Get friends from Firestore
+    let friendsCount = 0;
+    
+    if (userData && Array.isArray(userData.friends)) {
+      friendsCount = userData.friends.length;
+    }
+    
+    return friendsCount;
   }
 
   // Handle auth state changes
@@ -247,6 +368,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     isOnline: hasActiveSessions,
                     isShitting: status.isShitting || false,
                     lastActive: status.lastActive || Date.now(),
+                    shitStats: {
+                      totalShits: 0,
+                      shitEvents: [],
+                      lastShitDate: null,
+                    },
                   });
                 },
                 error => {
@@ -260,6 +386,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     isOnline: true,
                     isShitting: false,
                     lastActive: Date.now(),
+                    shitStats: {
+                      totalShits: 0,
+                      shitEvents: [],
+                      lastShitDate: null,
+                    },
                   });
                 }
               );
@@ -274,6 +405,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 isOnline: true,
                 isShitting: false,
                 lastActive: Date.now(),
+                shitStats: {
+                  totalShits: 0,
+                  shitEvents: [],
+                  lastShitDate: null,
+                },
               });
             }
           } catch (error) {
@@ -291,6 +427,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
               isOnline: true,
               isShitting: false,
               lastActive: Date.now(),
+              shitStats: {
+                totalShits: 0,
+                shitEvents: [],
+                lastShitDate: null,
+              },
             });
           }
         } else {
@@ -333,6 +474,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     logout,
     updateUserStatus,
+    getAverageShitsPerDay,
+    getFriendsCount,
   };
 
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;

@@ -1,10 +1,90 @@
 import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useState } from 'react';
-import { FaUser, FaEdit, FaCheck } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaUser, FaEdit, FaCheck, FaToilet, FaGamepad, FaUserFriends } from 'react-icons/fa';
+import { ref, onValue } from 'firebase/database';
 
 import { useAuth } from '../contexts/AuthContext';
-import { firestore } from '../firebase/config';
+import { firestore, database } from '../firebase/config';
+
+// ShitStats component to display shit-related statistics
+const ShitStats = () => {
+  const { currentUser, getAverageShitsPerDay, getFriendsCount } = useAuth();
+  const [totalShits, setTotalShits] = useState(0);
+  const [averageShitsPerDay, setAverageShitsPerDay] = useState(0);
+  const [friendsCount, setFriendsCount] = useState(0);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Get total shits from the database
+    const shitStatsRef = ref(database, `shitStats/${currentUser.uid}`);
+    const unsubscribe = onValue(shitStatsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const shitStats = snapshot.val();
+        setTotalShits(shitStats.totalShits || 0);
+      }
+    });
+
+    // Calculate average shits per day
+    setAverageShitsPerDay(getAverageShitsPerDay());
+    
+    // Get friends count
+    setFriendsCount(getFriendsCount());
+
+    return () => unsubscribe();
+  }, [currentUser, getAverageShitsPerDay, getFriendsCount]);
+
+  return (
+    <div className="card">
+      <h2 className="text-xl font-semibold mb-4">ShitStats</h2>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
+          <div className="flex justify-center mb-2">
+            <FaToilet className="text-primary text-xl" />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Total Shits</p>
+          <p className="text-2xl font-bold">{totalShits}</p>
+        </div>
+
+        <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
+          <div className="flex justify-center mb-2">
+            <FaToilet className="text-primary text-xl" />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Avg. Shits/Day</p>
+          <p className="text-2xl font-bold">{averageShitsPerDay.toFixed(1)}</p>
+        </div>
+
+        <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
+          <div className="flex justify-center mb-2">
+            <FaUserFriends className="text-primary text-xl" />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Friends</p>
+          <p className="text-2xl font-bold">{friendsCount}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Games Stats component (placeholder for now)
+const GamesStats = () => {
+  return (
+    <div className="card">
+      <h2 className="text-xl font-semibold mb-4">Games Stats</h2>
+
+      <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
+        <div className="flex justify-center mb-2">
+          <FaGamepad className="text-primary text-xl" />
+        </div>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">Total Games Played</p>
+        <p className="text-2xl font-bold">0</p>
+        <p className="text-xs text-gray-500 mt-2">Coming soon!</p>
+      </div>
+    </div>
+  );
+};
 
 const Profile = () => {
   const { currentUser, userData } = useAuth();
@@ -132,26 +212,8 @@ const Profile = () => {
         </div>
       </div>
 
-      <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Account Statistics</h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Total Shits</p>
-            <p className="text-2xl font-bold">42</p>
-          </div>
-
-          <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Games Played</p>
-            <p className="text-2xl font-bold">18</p>
-          </div>
-
-          <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Friends</p>
-            <p className="text-2xl font-bold">5</p>
-          </div>
-        </div>
-      </div>
+      <ShitStats />
+      <GamesStats />
     </div>
   );
 };
