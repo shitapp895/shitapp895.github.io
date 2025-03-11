@@ -8,17 +8,6 @@ const Footer = () => {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             © {new Date().getFullYear()} ShitApp - Connect during bathroom breaks
           </p>
-
-          <div className="flex items-center space-x-4 mt-2 md:mt-0">
-            <a
-              href="https://github.com/shitapp895/shitapp895.github.io"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-600 dark:text-gray-400 hover:text-primary"
-            >
-              <FaGithub className="text-xl" />
-            </a>
-          </div>
         </div>
       </div>
     </footer>
