@@ -25,6 +25,19 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Shit records rules
+    match /shitRecords/{recordId} {
+      allow read: if request.auth != null;
+      
+      // Allow creating a shit record if the authenticated user is the owner
+      allow create: if request.auth != null && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Allow updating or deleting a shit record if you're the owner
+      allow update, delete: if request.auth != null && 
+                             resource.data.userId == request.auth.uid;
+    }
+    
     // Friend requests rules
     match /friendRequests/{requestId} {
       allow read: if request.auth != null;

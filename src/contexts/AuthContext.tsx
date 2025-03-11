@@ -7,7 +7,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { ref, set, onValue, onDisconnect, get } from 'firebase/database';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection } from 'firebase/firestore';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 import { auth, firestore, database } from '../firebase/config';
@@ -20,6 +20,11 @@ interface UserData {
   isOnline: boolean;
   isShitting: boolean;
   lastActive: number;
+  totalShits?: number;
+  averageShitDuration?: number;
+  lastShitStartTime?: number;
+  friends?: string[];
+  totalShitDuration?: number;
 }
 
 interface AuthContextType {
@@ -136,15 +141,47 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const statusRef = ref(database, `status/${currentUser.uid}`);
       const snapshot = await get(statusRef);
 
+      const currentTime = Date.now();
+
       if (snapshot.exists()) {
         // Update existing status
         const currentStatus = snapshot.val() || {};
         const sessions = currentStatus.sessions || {};
 
+        // If transitioning from shitting to not shitting, record the shit
+        if (currentStatus.isShitting && !isShitting && currentStatus.lastShitStartTime) {
+          const duration = (currentTime - currentStatus.lastShitStartTime) / 1000; // Convert to seconds
+          
+          // Create a new shit record
+          const shitRecordRef = doc(collection(firestore, 'shitRecords'));
+          await setDoc(shitRecordRef, {
+            userId: currentUser.uid,
+            startTime: currentStatus.lastShitStartTime,
+            endTime: currentTime,
+            duration: duration,
+            createdAt: currentTime
+          });
+
+          // Update user's shit stats
+          const userRef = doc(firestore, 'users', currentUser.uid);
+          const userDoc = await getDoc(userRef);
+          const userData = userDoc.data() || {};
+          
+          const totalShits = (userData.totalShits || 0) + 1;
+          const totalDuration = (userData.totalShitDuration || 0) + duration;
+          
+          await updateDoc(userRef, {
+            totalShits,
+            totalShitDuration: totalDuration,
+            averageShitDuration: totalDuration / totalShits
+          });
+        }
+
         await set(statusRef, {
           isOnline: true,
           isShitting,
-          lastActive: Date.now(),
+          lastActive: currentTime,
+          lastShitStartTime: isShitting ? currentTime : null,
           sessions: { ...sessions, [sessionId]: true },
         });
       } else {
@@ -152,7 +189,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await set(statusRef, {
           isOnline: true,
           isShitting,
-          lastActive: Date.now(),
+          lastActive: currentTime,
+          lastShitStartTime: isShitting ? currentTime : null,
           sessions: { [sessionId]: true },
         });
       }
@@ -227,7 +265,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               // Listen for status changes
               onValue(
                 statusRef,
-                snapshot => {
+                async snapshot => {
                   const status = snapshot.val() || {
                     isOnline: false,
                     isShitting: false,
@@ -239,6 +277,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                   const hasActiveSessions =
                     status.sessions && Object.keys(status.sessions).length > 0;
 
+                  // Get the latest user data from Firestore to include shit stats
+                  const userDocRef = doc(firestore, 'users', user.uid);
+                  const userDoc = await getDoc(userDocRef);
+                  const firestoreData = userDoc.data() || {};
+
                   setUserData({
                     uid: user.uid,
                     email: user.email,
@@ -247,6 +290,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     isOnline: hasActiveSessions,
                     isShitting: status.isShitting || false,
                     lastActive: status.lastActive || Date.now(),
+                    totalShits: firestoreData.totalShits || 0,
+                    averageShitDuration: firestoreData.averageShitDuration || 0,
+                    totalShitDuration: firestoreData.totalShitDuration || 0,
+                    friends: firestoreData.friends || [],
+                    lastShitStartTime: status.lastShitStartTime || null,
                   });
                 },
                 error => {
@@ -260,6 +308,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     isOnline: true,
                     isShitting: false,
                     lastActive: Date.now(),
+                    totalShits: 0,
+                    averageShitDuration: 0,
+                    totalShitDuration: 0,
+                    friends: [],
                   });
                 }
               );

@@ -133,22 +133,26 @@ const Profile = () => {
       </div>
 
       <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Account Statistics</h2>
+        <h2 className="text-xl font-semibold mb-4">Shit Stats</h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
             <p className="text-gray-500 dark:text-gray-400 text-sm">Total Shits</p>
-            <p className="text-2xl font-bold">42</p>
+            <p className="text-2xl font-bold">{userData?.totalShits || 0}</p>
           </div>
 
           <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Games Played</p>
-            <p className="text-2xl font-bold">18</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Average Duration</p>
+            <p className="text-2xl font-bold">
+              {userData?.averageShitDuration 
+                ? `${Math.round(userData.averageShitDuration)}s`
+                : '0s'}
+            </p>
           </div>
 
           <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
             <p className="text-gray-500 dark:text-gray-400 text-sm">Friends</p>
-            <p className="text-2xl font-bold">5</p>
+            <p className="text-2xl font-bold">{userData?.friends?.length || 0}</p>
           </div>
         </div>
       </div>
