@@ -66,22 +66,14 @@ service cloud.firestore {
       "$uid": {
         // Allow users to read and write only to their own shit events
         ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid",
-        "$eventId": {
-          ".read": "auth != null && auth.uid == $uid",
-          ".write": "auth != null && auth.uid == $uid"
-        }
+        ".write": "auth != null && auth.uid == $uid"
       }
     },
     "shitStats": {
       "$uid": {
         // Allow users to read and write only to their own shit stats
-        ".read": "auth != null && auth.uid == $uid",
+        ".read": "auth != null",
         ".write": "auth != null && auth.uid == $uid"
-      },
-      // Allow friends to read each other's shit stats (for leaderboards, etc.)
-      "$uid": {
-        ".read": "auth != null && root.child('users').child(auth.uid).child('friends').hasChild($uid)"
       }
     }
   }
