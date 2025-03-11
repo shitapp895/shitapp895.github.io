@@ -1,6 +1,5 @@
 import { FaToilet, FaUser, FaUserFriends, FaSignOutAlt } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
-
 import { useAuth } from '../contexts/AuthContext';
 
 const Navbar = () => {

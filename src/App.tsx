@@ -1,39 +1,33 @@
-import { Routes, Route } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from './firebase/config'
-
-// Layouts
-import MainLayout from './layouts/MainLayout'
-
-// Pages
-import Home from './pages/Home'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import Profile from './pages/Profile'
-import Friends from './pages/Friends'
-import NotFound from './pages/NotFound'
-
-// Context
-import { AuthProvider } from './contexts/AuthContext'
+import { onAuthStateChanged } from 'firebase/auth';
+import { useEffect, useState } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { auth } from './firebase/config';
+import MainLayout from './layouts/MainLayout';
+import Friends from './pages/Friends';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import NotFound from './pages/NotFound';
+import Profile from './pages/Profile';
+import Register from './pages/Register';
 
 function App() {
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, () => {
-      setLoading(false)
-    })
+      setLoading(false);
+    });
 
-    return () => unsubscribe()
-  }, [])
+    return () => unsubscribe();
+  }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -49,7 +43,7 @@ function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AuthProvider>
-  )
+  );
 }
 
-export default App 
+export default App;

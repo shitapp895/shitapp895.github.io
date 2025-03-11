@@ -2,7 +2,6 @@ import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import { FaUser, FaEdit, FaCheck } from 'react-icons/fa';
-
 import { useAuth } from '../contexts/AuthContext';
 import { firestore } from '../firebase/config';
 
