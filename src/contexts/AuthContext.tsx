@@ -9,7 +9,6 @@ import {
 import { ref, set, onValue, onDisconnect, get } from 'firebase/database';
 import { doc, setDoc, getDoc, updateDoc, collection } from 'firebase/firestore';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
 import { auth, firestore, database } from '../firebase/config';
 
 interface UserData {
@@ -151,7 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // If transitioning from shitting to not shitting, record the shit
         if (currentStatus.isShitting && !isShitting && currentStatus.lastShitStartTime) {
           const duration = (currentTime - currentStatus.lastShitStartTime) / 1000; // Convert to seconds
-          
+
           // Create a new shit record
           const shitRecordRef = doc(collection(firestore, 'shitRecords'));
           await setDoc(shitRecordRef, {
@@ -159,21 +158,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
             startTime: currentStatus.lastShitStartTime,
             endTime: currentTime,
             duration: duration,
-            createdAt: currentTime
+            createdAt: currentTime,
           });
 
           // Update user's shit stats
           const userRef = doc(firestore, 'users', currentUser.uid);
           const userDoc = await getDoc(userRef);
           const userData = userDoc.data() || {};
-          
+
           const totalShits = (userData.totalShits || 0) + 1;
           const totalDuration = (userData.totalShitDuration || 0) + duration;
-          
+
           await updateDoc(userRef, {
             totalShits,
             totalShitDuration: totalDuration,
-            averageShitDuration: totalDuration / totalShits
+            averageShitDuration: totalDuration / totalShits,
           });
         }
 
@@ -205,136 +204,125 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Handle auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async user => {
-        setCurrentUser(user);
+    const handleBeforeUnload = () => {
+      if (currentUser) {
+        const statusRef = ref(database, `status/${currentUser.uid}/sessions/${sessionId}`);
+        set(statusRef, null);
+      }
+    };
 
-        if (user) {
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    const authUnsubscribe = onAuthStateChanged(auth, async user => {
+      setCurrentUser(user);
+
+      if (user) {
+        try {
+          // Get user data from Firestore
+          const userDocRef = doc(firestore, 'users', user.uid);
+          let userDoc;
+
           try {
-            // Get user data from Firestore
-            const userDocRef = doc(firestore, 'users', user.uid);
-            let userDoc;
+            userDoc = await getDoc(userDocRef);
 
-            try {
-              userDoc = await getDoc(userDocRef);
-
-              // If user document doesn't exist, create it
-              if (!userDoc.exists()) {
-                await setDoc(userDocRef, {
-                  uid: user.uid,
-                  email: user.email,
-                  displayName: user.displayName,
-                  photoURL: user.photoURL,
-                  createdAt: Date.now(),
-                  friends: [],
-                });
-              }
-            } catch (error) {
-              console.error('Error getting user document:', error);
-              // Continue anyway to try setting up status
-            }
-
-            // Set up status in Realtime Database
-            const statusRef = ref(database, `status/${user.uid}`);
-
-            try {
-              // Check if status exists
-              const statusSnapshot = await get(statusRef);
-              const existingStatus = statusSnapshot.val() || {
-                isOnline: false,
-                isShitting: false,
-                lastActive: Date.now(),
-                sessions: {},
-              };
-
-              // Update status with this session
-              await set(statusRef, {
-                ...existingStatus,
-                isOnline: true,
-                lastActive: Date.now(),
-                sessions: {
-                  ...(existingStatus.sessions || {}),
-                  [sessionId]: true,
-                },
-              });
-
-              // Set up onDisconnect to remove this session when tab closes
-              onDisconnect(ref(database, `status/${user.uid}/sessions/${sessionId}`)).remove();
-
-              // Listen for status changes
-              onValue(
-                statusRef,
-                async snapshot => {
-                  const status = snapshot.val() || {
-                    isOnline: false,
-                    isShitting: false,
-                    lastActive: Date.now(),
-                    sessions: {},
-                  };
-
-                  // Determine if user is online based on any active sessions
-                  const hasActiveSessions =
-                    status.sessions && Object.keys(status.sessions).length > 0;
-
-                  // Get the latest user data from Firestore to include shit stats
-                  const userDocRef = doc(firestore, 'users', user.uid);
-                  const userDoc = await getDoc(userDocRef);
-                  const firestoreData = userDoc.data() || {};
-
-                  setUserData({
-                    uid: user.uid,
-                    email: user.email,
-                    displayName: user.displayName,
-                    photoURL: user.photoURL,
-                    isOnline: hasActiveSessions,
-                    isShitting: status.isShitting || false,
-                    lastActive: status.lastActive || Date.now(),
-                    totalShits: firestoreData.totalShits || 0,
-                    averageShitDuration: firestoreData.averageShitDuration || 0,
-                    totalShitDuration: firestoreData.totalShitDuration || 0,
-                    friends: firestoreData.friends || [],
-                    lastShitStartTime: status.lastShitStartTime || null,
-                  });
-                },
-                error => {
-                  console.error('Error listening to status:', error);
-                  // Still set basic user data even if we can't get status
-                  setUserData({
-                    uid: user.uid,
-                    email: user.email,
-                    displayName: user.displayName,
-                    photoURL: user.photoURL,
-                    isOnline: true,
-                    isShitting: false,
-                    lastActive: Date.now(),
-                    totalShits: 0,
-                    averageShitDuration: 0,
-                    totalShitDuration: 0,
-                    friends: [],
-                  });
-                }
-              );
-            } catch (error) {
-              console.error('Error setting up status:', error);
-              // Still set basic user data even if we can't set up status
-              setUserData({
+            // If user document doesn't exist, create it
+            if (!userDoc.exists()) {
+              await setDoc(userDocRef, {
                 uid: user.uid,
                 email: user.email,
                 displayName: user.displayName,
                 photoURL: user.photoURL,
-                isOnline: true,
-                isShitting: false,
-                lastActive: Date.now(),
+                createdAt: Date.now(),
+                friends: [],
               });
             }
           } catch (error) {
-            console.error('Error setting up user data:', error);
-            setError(
-              'There was a problem connecting to the server. Some features may not work properly.'
-            );
+            console.error('Error getting user document:', error);
+            // Continue anyway to try setting up status
+          }
 
-            // Still set basic user data
+          // Set up status in Realtime Database
+          const statusRef = ref(database, `status/${user.uid}`);
+
+          try {
+            // Check if status exists
+            const statusSnapshot = await get(statusRef);
+            const existingStatus = statusSnapshot.val() || {
+              isOnline: false,
+              isShitting: false,
+              lastActive: Date.now(),
+              sessions: {},
+            };
+
+            // Update status with this session
+            await set(statusRef, {
+              ...existingStatus,
+              isOnline: true,
+              lastActive: Date.now(),
+              sessions: {
+                ...(existingStatus.sessions || {}),
+                [sessionId]: true,
+              },
+            });
+
+            // Set up onDisconnect to remove this session when tab closes
+            onDisconnect(ref(database, `status/${user.uid}/sessions/${sessionId}`)).remove();
+
+            // Listen for status changes
+            onValue(
+              statusRef,
+              async snapshot => {
+                const status = snapshot.val() || {
+                  isOnline: false,
+                  isShitting: false,
+                  lastActive: Date.now(),
+                  sessions: {},
+                };
+
+                // Determine if user is online based on any active sessions
+                const hasActiveSessions =
+                  status.sessions && Object.keys(status.sessions).length > 0;
+
+                // Get the latest user data from Firestore to include shit stats
+                const userDocRef = doc(firestore, 'users', user.uid);
+                const userDoc = await getDoc(userDocRef);
+                const firestoreData = userDoc.data() || {};
+
+                setUserData({
+                  uid: user.uid,
+                  email: user.email,
+                  displayName: user.displayName,
+                  photoURL: user.photoURL,
+                  isOnline: hasActiveSessions,
+                  isShitting: status.isShitting || false,
+                  lastActive: status.lastActive || Date.now(),
+                  totalShits: firestoreData.totalShits || 0,
+                  averageShitDuration: firestoreData.averageShitDuration || 0,
+                  totalShitDuration: firestoreData.totalShitDuration || 0,
+                  friends: firestoreData.friends || [],
+                  lastShitStartTime: status.lastShitStartTime || null,
+                });
+              },
+              error => {
+                console.error('Error listening to status:', error);
+                // Still set basic user data even if we can't get status
+                setUserData({
+                  uid: user.uid,
+                  email: user.email,
+                  displayName: user.displayName,
+                  photoURL: user.photoURL,
+                  isOnline: true,
+                  isShitting: false,
+                  lastActive: Date.now(),
+                  totalShits: 0,
+                  averageShitDuration: 0,
+                  totalShitDuration: 0,
+                  friends: [],
+                });
+              }
+            );
+          } catch (error) {
+            console.error('Error setting up status:', error);
+            // Still set basic user data even if we can't set up status
             setUserData({
               uid: user.uid,
               email: user.email,
@@ -343,38 +331,50 @@ export function AuthProvider({ children }: AuthProviderProps) {
               isOnline: true,
               isShitting: false,
               lastActive: Date.now(),
+              totalShits: 0,
+              averageShitDuration: 0,
+              totalShitDuration: 0,
+              friends: [],
             });
           }
-        } else {
-          setUserData(null);
-          setError(null);
+        } catch (error) {
+          console.error('Error setting up user data:', error);
+          setError(
+            'There was a problem connecting to the server. Some features may not work properly.'
+          );
+
+          // Still set basic user data
+          setUserData({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            isOnline: true,
+            isShitting: false,
+            lastActive: Date.now(),
+            totalShits: 0,
+            averageShitDuration: 0,
+            totalShitDuration: 0,
+            friends: [],
+          });
         }
-
-        setLoading(false);
-      },
-      error => {
-        console.error('Auth state change error:', error);
-        setError('Authentication error. Please try logging in again.');
-        setLoading(false);
+      } else {
+        setUserData(null);
+        setError(null);
       }
-    );
 
-    // Handle beforeunload event to clean up session
-    const handleBeforeUnload = () => {
+      setLoading(false);
+    });
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      authUnsubscribe();
       if (currentUser) {
-        // Use synchronous API for beforeunload
         const statusRef = ref(database, `status/${currentUser.uid}/sessions/${sessionId}`);
         set(statusRef, null);
       }
     };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      unsubscribe();
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
+  }, [currentUser]);
 
   const value = {
     currentUser,

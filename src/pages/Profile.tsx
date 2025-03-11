@@ -2,7 +2,6 @@ import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import { FaUser, FaEdit, FaCheck } from 'react-icons/fa';
-
 import { useAuth } from '../contexts/AuthContext';
 import { firestore } from '../firebase/config';
 
@@ -144,7 +143,7 @@ const Profile = () => {
           <div className="bg-gray-100 dark:bg-slate-700 p-4 rounded-lg text-center">
             <p className="text-gray-500 dark:text-gray-400 text-sm">Average Duration</p>
             <p className="text-2xl font-bold">
-              {userData?.averageShitDuration 
+              {userData?.averageShitDuration
                 ? `${Math.round(userData.averageShitDuration)}s`
                 : '0s'}
             </p>
