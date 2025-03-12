@@ -116,6 +116,11 @@ const Home = () => {
     // Immediately clear the game state to prevent any flicker
     setActiveGameId(null);
     setActiveOpponentId(null);
+    
+    // Force a re-render to ensure the game component is unmounted
+    setTimeout(() => {
+      setSelectedGame(null);
+    }, 0);
   };
 
   return (

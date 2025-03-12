@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
@@ -84,6 +84,8 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
   const [loading, setLoading] = useState(true);
   const [opponentName, setOpponentName] = useState('Opponent');
   const [showGameOver, setShowGameOver] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(true);
 
   // Get opponent's name
   useEffect(() => {
@@ -302,13 +304,24 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
     );
   };
 
-  // Clean up game invite when closing
-  const handleClose = async () => {
-    // Set loading to true to prevent flicker of second window
-    setLoading(true);
+  // Memoize the close handler to prevent recreating it on each render
+  const handleClose = useCallback(async () => {
+    // Prevent multiple clicks
+    if (isClosing) return;
     
+    // Set closing state immediately
+    setIsClosing(true);
+    
+    // Hide the modal first to prevent the shadow gap
+    setModalVisible(false);
+    
+    // Call onClose after a very short delay to allow the modal to hide
+    setTimeout(() => {
+      onClose();
+    }, 10);
+    
+    // Clean up in the background after component is unmounted
     try {
-      // Find and delete the game invite
       if (currentUser) {
         // Check if user is sender
         const senderQuery = query(
@@ -338,11 +351,8 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
       }
     } catch (error) {
       console.error('Error cleaning up game invite:', error);
-    } finally {
-      // Always call onClose, even if there's an error
-      onClose();
     }
-  };
+  }, [currentUser, gameId, onClose, isClosing]);
 
   if (loading) {
     return (
@@ -355,13 +365,17 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
   }
 
   // Show game over screen
-  if (showGameOver && gameState && gameState.status === 'completed') {
+  if (showGameOver && gameState && gameState.status === 'completed' && modalVisible) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg w-full max-w-md">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold">Game Over</h2>
-            <button onClick={handleClose} className="text-gray-500 hover:text-gray-700">
+            <button 
+              onClick={handleClose} 
+              disabled={isClosing}
+              className="text-gray-500 hover:text-gray-700"
+            >
               ✕
             </button>
           </div>
@@ -381,9 +395,10 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
             
             <button 
               onClick={handleClose}
-              className="px-4 py-2 bg-primary text-white rounded"
+              disabled={isClosing}
+              className={`px-4 py-2 ${isClosing ? 'bg-gray-400' : 'bg-primary'} text-white rounded`}
             >
-              Close Game
+              {isClosing ? 'Closing...' : 'Close Game'}
             </button>
           </div>
         </div>
@@ -391,12 +406,20 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
     );
   }
 
+  if (!modalVisible) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Toilet Wordle</h2>
-          <button onClick={handleClose} className="text-gray-500 hover:text-gray-700">
+          <button 
+            onClick={handleClose}
+            disabled={isClosing}
+            className="text-gray-500 hover:text-gray-700"
+          >
             ✕
           </button>
         </div>

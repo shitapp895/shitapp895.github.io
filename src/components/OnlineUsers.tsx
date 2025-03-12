@@ -322,6 +322,12 @@ const OnlineUsers = () => {
     // Immediately clear the game state to prevent any flicker
     setActiveGameId(null);
     setActiveOpponentId(null);
+    
+    // Force a re-render to ensure the game component is unmounted
+    setTimeout(() => {
+      // Reset any other state that might be related to the game
+      setActiveInviteId(null);
+    }, 0);
   };
 
   if (loading) {
