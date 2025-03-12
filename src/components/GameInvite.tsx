@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
+import { useAuth } from '../contexts/AuthContext';
 import { FaGamepad } from 'react-icons/fa';
 
 interface GameInviteProps {

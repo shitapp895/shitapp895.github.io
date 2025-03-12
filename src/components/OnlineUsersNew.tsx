@@ -15,7 +15,7 @@ interface OnlineUser {
 
 const OnlineUsers = () => {
   const { currentUser, userData } = useAuth()
-  const { setActiveInviteId, selectedGame } = useGame()
+  const { selectedGame } = useGame()
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
   const [friends, setFriends] = useState<string[]>([])
   const [loading, setLoading] = useState(true)

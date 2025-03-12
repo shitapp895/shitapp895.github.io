@@ -10,17 +10,6 @@ const games = [
   { id: 'hangman', name: 'Hangman', icon: '👨‍🦯' },
 ]
 
-interface GameInviteData {
-  id: string
-  senderId: string
-  senderName: string
-  receiverId: string
-  gameType: 'wordle'
-  status: 'accepted'
-  createdAt: number
-  gameId: string
-}
-
 const Home = () => {
   const { userData } = useAuth()
   const { selectedGame, setSelectedGame } = useGame()

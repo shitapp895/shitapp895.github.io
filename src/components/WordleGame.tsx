@@ -77,7 +77,7 @@ const WORDS = [
 ];
 
 const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser } = useAuth();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [currentGuess, setCurrentGuess] = useState('');
   const [message, setMessage] = useState('');
