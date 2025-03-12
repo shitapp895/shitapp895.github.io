@@ -83,6 +83,7 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [opponentName, setOpponentName] = useState('Opponent');
+  const [showGameOver, setShowGameOver] = useState(false);
 
   // Get opponent's name
   useEffect(() => {
@@ -108,7 +109,13 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
     
     const unsubscribe = onSnapshot(gameRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
-        setGameState(docSnapshot.data() as GameState);
+        const newGameState = docSnapshot.data() as GameState;
+        setGameState(newGameState);
+        
+        // If the game just completed, show the game over screen
+        if (newGameState.status === 'completed' && !showGameOver) {
+          setShowGameOver(true);
+        }
       }
       setLoading(false);
     }, (error) => {
@@ -118,7 +125,7 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
     });
 
     return () => unsubscribe();
-  }, [currentUser, gameId]);
+  }, [currentUser, gameId, showGameOver]);
 
   // Initialize game if it doesn't exist
   useEffect(() => {
@@ -345,6 +352,43 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
     );
   }
 
+  // Show game over screen
+  if (showGameOver && gameState && gameState.status === 'completed') {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg w-full max-w-md">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Game Over</h2>
+            <button onClick={handleClose} className="text-gray-500 hover:text-gray-700">
+              ✕
+            </button>
+          </div>
+          
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4 text-2xl">
+              {gameState.winner === currentUser?.uid ? '🏆' : '👏'}
+            </div>
+            
+            <h3 className="text-xl font-bold mb-2">
+              {gameState.winner === currentUser?.uid 
+                ? 'You Won!' 
+                : `${opponentName} Won!`}
+            </h3>
+            
+            <p className="mb-4">The word was: <span className="font-bold">{gameState.word}</span></p>
+            
+            <button 
+              onClick={handleClose}
+              className="px-4 py-2 bg-primary text-white rounded"
+            >
+              Close Game
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg w-full max-w-md">
@@ -411,18 +455,6 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
             </div>
 
             {gameState.status !== 'completed' && gameState.currentPlayer === currentUser?.uid && renderKeyboard()}
-            
-            {gameState.status === 'completed' && (
-              <div className="text-center mt-4">
-                <p className="mb-2">The word was: <span className="font-bold">{gameState.word}</span></p>
-                <button 
-                  onClick={handleClose}
-                  className="px-4 py-2 bg-primary text-white rounded"
-                >
-                  Close Game
-                </button>
-              </div>
-            )}
           </>
         )}
       </div>
