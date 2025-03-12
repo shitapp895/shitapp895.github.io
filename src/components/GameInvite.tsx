@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { FaGamepad } from 'react-icons/fa';
