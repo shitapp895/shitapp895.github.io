@@ -295,6 +295,9 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
 
   // Clean up game invite when closing
   const handleClose = async () => {
+    // Set loading to true to prevent flicker of second window
+    setLoading(true);
+    
     try {
       // Find and delete the game invite
       if (currentUser) {
@@ -328,7 +331,7 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
       console.error('Error cleaning up game invite:', error);
     }
     
-    // Call the original onClose function
+    // Call the original onClose function immediately
     onClose();
   };
 

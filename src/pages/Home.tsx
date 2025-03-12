@@ -113,6 +113,7 @@ const Home = () => {
   };
 
   const handleCloseGame = () => {
+    // Immediately clear the game state to prevent any flicker
     setActiveGameId(null);
     setActiveOpponentId(null);
   };
