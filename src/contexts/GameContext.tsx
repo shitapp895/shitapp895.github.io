@@ -19,6 +19,8 @@ interface GameContextType {
   activeOpponentId: string | null;
   activeInviteId: string | null;
   pendingInvites: GameInviteData[];
+  selectedGame: string | null;
+  setSelectedGame: (game: string | null) => void;
   setActiveInviteId: (id: string | null) => void;
   handleCloseGame: () => void;
   handleAcceptInvite: (gameId: string, opponentId: string) => void;
@@ -41,6 +43,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null);
   const [activeInviteId, setActiveInviteId] = useState<string | null>(null);
   const [pendingInvites, setPendingInvites] = useState<GameInviteData[]>([]);
+  const [selectedGame, setSelectedGame] = useState<string | null>(null);
 
   // Check for active games and pending invites
   useEffect(() => {
@@ -156,6 +159,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     activeOpponentId,
     activeInviteId,
     pendingInvites,
+    selectedGame,
+    setSelectedGame,
     setActiveInviteId,
     handleCloseGame,
     handleAcceptInvite,

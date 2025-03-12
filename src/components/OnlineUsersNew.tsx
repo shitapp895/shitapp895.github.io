@@ -15,12 +15,12 @@ interface OnlineUser {
 
 const OnlineUsers = () => {
   const { currentUser, userData } = useAuth()
-  const { setActiveInviteId } = useGame()
+  const { setActiveInviteId, selectedGame } = useGame()
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
   const [friends, setFriends] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [inviteSendingStatus, setInviteSendingStatus] = useState<{[key: string]: 'sending' | 'sent' | 'error'}>({})
+  const [inviteSendingStatus, setInviteSendingStatus] = useState<{[key: string]: 'sending' | 'sent' | 'error' | 'needsSelection'}>({})
 
   // Get user's friends
   useEffect(() => {
@@ -158,6 +158,22 @@ const OnlineUsers = () => {
   const sendGameInvite = async (userId: string, userName: string) => {
     if (!currentUser || !userData) return;
     
+    // Check if Wordle is selected
+    if (selectedGame !== 'wordle') {
+      setInviteSendingStatus(prev => ({ ...prev, [userId]: 'needsSelection' }));
+      
+      // Reset status after 3 seconds
+      setTimeout(() => {
+        setInviteSendingStatus(prev => {
+          const newStatus = { ...prev };
+          delete newStatus[userId];
+          return newStatus;
+        });
+      }, 3000);
+      
+      return;
+    }
+    
     try {
       setInviteSendingStatus(prev => ({ ...prev, [userId]: 'sending' }));
       
@@ -265,6 +281,8 @@ const OnlineUsers = () => {
                     <span className="text-green-500 text-xs">Sent!</span>
                   ) : inviteSendingStatus[user.uid] === 'error' ? (
                     <span className="text-red-500 text-xs">Error</span>
+                  ) : inviteSendingStatus[user.uid] === 'needsSelection' ? (
+                    <span className="text-amber-500 text-xs">Select game first</span>
                   ) : (
                     <FaGamepad />
                   )}

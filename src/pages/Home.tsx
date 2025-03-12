@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useGame } from '../contexts/GameContext'
 import { FaToilet, FaGamepad } from 'react-icons/fa'
@@ -24,15 +23,13 @@ interface GameInviteData {
 
 const Home = () => {
   const { userData } = useAuth()
-  const [selectedGame, setSelectedGame] = useState<string | null>(null)
+  const { selectedGame, setSelectedGame } = useGame()
 
   const handleGameSelect = (gameId: string) => {
-    if (gameId === 'wordle') {
-      setSelectedGame(gameId);
-      // For wordle, we don't do anything yet as it requires an opponent
-      // The game will be started when an invite is accepted
+    // Toggle selection - if already selected, deselect it
+    if (selectedGame === gameId) {
+      setSelectedGame(null);
     } else {
-      // For other games, just select them (not implemented yet)
       setSelectedGame(gameId);
     }
   };
