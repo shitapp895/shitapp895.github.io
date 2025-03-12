@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useGame } from '../contexts/GameContext'
 import { FaToilet, FaGamepad } from 'react-icons/fa'
-import { collection, query, where, getDocs, getDoc, doc, deleteDoc } from 'firebase/firestore'
-import { firestore } from '../firebase/config'
-import WordleGame from '../components/WordleGame'
 
 // Mini-games
 const games = [
@@ -25,81 +23,8 @@ interface GameInviteData {
 }
 
 const Home = () => {
-  const { userData, currentUser } = useAuth()
+  const { userData } = useAuth()
   const [selectedGame, setSelectedGame] = useState<string | null>(null)
-  const [activeGameId, setActiveGameId] = useState<string | null>(null)
-  const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null)
-
-  // Check for active games
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const checkForActiveGames = async () => {
-      try {
-        // Check for accepted game invites where the current user is the sender
-        const senderInvitesQuery = query(
-          collection(firestore, 'gameInvites'),
-          where('senderId', '==', currentUser.uid),
-          where('status', '==', 'accepted')
-        );
-
-        const senderInvitesSnapshot = await getDocs(senderInvitesQuery);
-        
-        if (!senderInvitesSnapshot.empty) {
-          const invite = senderInvitesSnapshot.docs[0].data() as GameInviteData;
-          
-          // Check if the game is still active
-          if (invite.gameId) {
-            const gameDoc = await getDoc(doc(firestore, 'wordleGames', invite.gameId));
-            if (gameDoc.exists() && gameDoc.data().status !== 'completed') {
-              setActiveGameId(invite.gameId);
-              setActiveOpponentId(invite.receiverId);
-              return;
-            } else {
-              // If game is completed, clean up the invite
-              await deleteDoc(doc(firestore, 'gameInvites', senderInvitesSnapshot.docs[0].id));
-            }
-          }
-        }
-
-        // Check for accepted game invites where the current user is the receiver
-        const receiverInvitesQuery = query(
-          collection(firestore, 'gameInvites'),
-          where('receiverId', '==', currentUser.uid),
-          where('status', '==', 'accepted')
-        );
-
-        const receiverInvitesSnapshot = await getDocs(receiverInvitesQuery);
-        
-        if (!receiverInvitesSnapshot.empty) {
-          const invite = receiverInvitesSnapshot.docs[0].data() as GameInviteData;
-          
-          // Check if the game is still active
-          if (invite.gameId) {
-            const gameDoc = await getDoc(doc(firestore, 'wordleGames', invite.gameId));
-            if (gameDoc.exists() && gameDoc.data().status !== 'completed') {
-              setActiveGameId(invite.gameId);
-              setActiveOpponentId(invite.senderId);
-              return;
-            } else {
-              // If game is completed, clean up the invite
-              await deleteDoc(doc(firestore, 'gameInvites', receiverInvitesSnapshot.docs[0].id));
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error checking for active games:', error);
-      }
-    };
-
-    // Check for active games on component mount
-    checkForActiveGames();
-
-    // Set up a periodic check for new active games
-    const intervalId = setInterval(checkForActiveGames, 10000);
-
-    return () => clearInterval(intervalId);
-  }, [currentUser]);
 
   const handleGameSelect = (gameId: string) => {
     if (gameId === 'wordle') {
@@ -110,17 +35,6 @@ const Home = () => {
       // For other games, just select them (not implemented yet)
       setSelectedGame(gameId);
     }
-  };
-
-  const handleCloseGame = () => {
-    // Immediately clear the game state to prevent any flicker
-    setActiveGameId(null);
-    setActiveOpponentId(null);
-    
-    // Force a re-render to ensure the game component is unmounted
-    setTimeout(() => {
-      setSelectedGame(null);
-    }, 0);
   };
 
   return (
@@ -199,15 +113,6 @@ const Home = () => {
           </div>
         )}
       </div>
-
-      {/* Wordle Game Modal */}
-      {activeGameId && activeOpponentId && (
-        <WordleGame 
-          gameId={activeGameId}
-          opponentId={activeOpponentId}
-          onClose={handleCloseGame}
-        />
-      )}
     </div>
   )
 }

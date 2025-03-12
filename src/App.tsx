@@ -16,6 +16,7 @@ import NotFound from './pages/NotFound'
 
 // Context
 import { AuthProvider } from './contexts/AuthContext'
+import { GameProvider } from './contexts/GameContext'
 
 function App() {
   const [loading, setLoading] = useState(true)
@@ -38,16 +39,18 @@ function App() {
 
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<Home />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="friends" element={<Friends />} />
-        </Route>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <GameProvider>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<Home />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="friends" element={<Friends />} />
+          </Route>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </GameProvider>
     </AuthProvider>
   )
 }

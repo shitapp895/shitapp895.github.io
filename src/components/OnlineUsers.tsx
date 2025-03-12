@@ -3,6 +3,7 @@ import { ref, onValue } from 'firebase/database'
 import { collection, query, where, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 import { database, firestore } from '../firebase/config'
 import { useAuth } from '../contexts/AuthContext'
+import { useGame } from '../contexts/GameContext'
 import { FaToilet, FaGamepad } from 'react-icons/fa'
 import GameInvite from './GameInvite'
 import WordleGame from './WordleGame'
@@ -27,6 +28,7 @@ interface GameInviteData {
 
 const OnlineUsers = () => {
   const { currentUser, userData } = useAuth()
+  const { setActiveInviteId } = useGame()
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
   const [friends, setFriends] = useState<string[]>([])
   const [loading, setLoading] = useState(true)

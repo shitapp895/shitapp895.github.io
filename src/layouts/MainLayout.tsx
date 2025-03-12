@@ -2,7 +2,8 @@ import { Outlet, Navigate } from 'react-router-dom';
 
 import Footer from '../components/Footer';
 import Navbar from '../components/Navbar';
-import OnlineUsers from '../components/OnlineUsers';
+import OnlineUsers from '../components/OnlineUsersNew';
+import GameModal from '../components/GameModal';
 import { useAuth } from '../contexts/AuthContext';
 
 const MainLayout = () => {
@@ -37,6 +38,9 @@ const MainLayout = () => {
       </main>
 
       <Footer />
+      
+      {/* Centralized Game Modal */}
+      <GameModal />
     </div>
   );
 };
