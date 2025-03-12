@@ -52,6 +52,38 @@ service cloud.firestore {
         resource.data.receiverId == request.auth.uid
       );
     }
+    
+    // Game invites rules
+    match /gameInvites/{inviteId} {
+      allow read: if request.auth != null;
+      
+      // Allow creating a game invite if the authenticated user is the sender
+      allow create: if request.auth != null && 
+                     request.resource.data.senderId == request.auth.uid;
+      
+      // Allow updating or deleting a game invite if you're the sender or receiver
+      allow update, delete: if request.auth != null && (
+        resource.data.senderId == request.auth.uid || 
+        resource.data.receiverId == request.auth.uid
+      );
+    }
+    
+    // Wordle games rules
+    match /wordleGames/{gameId} {
+      allow read: if request.auth != null;
+      
+      // Allow creating a wordle game if the authenticated user is one of the players
+      allow create: if request.auth != null && (
+        request.resource.data.player1 == request.auth.uid || 
+        request.resource.data.player2 == request.auth.uid
+      );
+      
+      // Allow updating a wordle game if you're one of the players
+      allow update: if request.auth != null && (
+        resource.data.player1 == request.auth.uid || 
+        resource.data.player2 == request.auth.uid
+      );
+    }
   }
 }
 

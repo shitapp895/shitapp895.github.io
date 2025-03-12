@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { ref, onValue } from 'firebase/database'
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
 import { database, firestore } from '../firebase/config'
 import { useAuth } from '../contexts/AuthContext'
 import { FaToilet, FaGamepad } from 'react-icons/fa'
+import GameInvite from './GameInvite'
+import WordleGame from './WordleGame'
 
 interface OnlineUser {
   uid: string
@@ -12,12 +14,28 @@ interface OnlineUser {
   lastActive: number
 }
 
+interface GameInviteData {
+  id: string
+  senderId: string
+  senderName: string
+  receiverId: string
+  gameType: 'wordle'
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled'
+  createdAt: number
+  gameId?: string
+}
+
 const OnlineUsers = () => {
   const { currentUser, userData } = useAuth()
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
   const [friends, setFriends] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [pendingInvites, setPendingInvites] = useState<GameInviteData[]>([])
+  const [activeInviteId, setActiveInviteId] = useState<string | null>(null)
+  const [activeGameId, setActiveGameId] = useState<string | null>(null)
+  const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null)
+  const [inviteSendingStatus, setInviteSendingStatus] = useState<{[key: string]: 'sending' | 'sent' | 'error'}>({})
 
   // Get user's friends
   useEffect(() => {
@@ -152,11 +170,105 @@ const OnlineUsers = () => {
     }
   }, [currentUser, friends])
 
-  const sendGameInvite = (userId: string) => {
-    // This would be implemented with Firebase to send a game invite
-    console.log(`Sending game invite to ${userId}`)
-    alert(`Game invite sent to ${userId}!`)
-  }
+  // Listen for game invites
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fetchPendingInvites = async () => {
+      try {
+        // Query for pending invites where the current user is the receiver
+        const invitesQuery = query(
+          collection(firestore, 'gameInvites'),
+          where('receiverId', '==', currentUser.uid),
+          where('status', '==', 'pending')
+        );
+
+        const invitesSnapshot = await getDocs(invitesQuery);
+        const invitesList: GameInviteData[] = [];
+
+        invitesSnapshot.forEach(doc => {
+          invitesList.push({ id: doc.id, ...doc.data() } as GameInviteData);
+        });
+
+        setPendingInvites(invitesList);
+
+        // If there's a pending invite, set it as active
+        if (invitesList.length > 0 && !activeInviteId && !activeGameId) {
+          setActiveInviteId(invitesList[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching game invites:', error);
+      }
+    };
+
+    // Initial fetch
+    fetchPendingInvites();
+
+    // Set up a periodic check for new invites
+    const intervalId = setInterval(fetchPendingInvites, 10000);
+
+    return () => clearInterval(intervalId);
+  }, [currentUser, activeInviteId, activeGameId]);
+
+  const sendGameInvite = async (userId: string, userName: string) => {
+    if (!currentUser || !userData) return;
+    
+    try {
+      setInviteSendingStatus(prev => ({ ...prev, [userId]: 'sending' }));
+      
+      // Create a new invite document
+      const inviteRef = doc(collection(firestore, 'gameInvites'));
+      
+      await setDoc(inviteRef, {
+        senderId: currentUser.uid,
+        senderName: userData.displayName,
+        receiverId: userId,
+        receiverName: userName,
+        gameType: 'wordle',
+        status: 'pending',
+        createdAt: Date.now()
+      });
+      
+      setInviteSendingStatus(prev => ({ ...prev, [userId]: 'sent' }));
+      
+      // Reset status after 3 seconds
+      setTimeout(() => {
+        setInviteSendingStatus(prev => {
+          const newStatus = { ...prev };
+          delete newStatus[userId];
+          return newStatus;
+        });
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error sending game invite:', error);
+      setInviteSendingStatus(prev => ({ ...prev, [userId]: 'error' }));
+      
+      // Reset error status after 3 seconds
+      setTimeout(() => {
+        setInviteSendingStatus(prev => {
+          const newStatus = { ...prev };
+          delete newStatus[userId];
+          return newStatus;
+        });
+      }, 3000);
+    }
+  };
+
+  const handleAcceptInvite = (gameId: string, opponentId: string) => {
+    setActiveGameId(gameId);
+    setActiveOpponentId(opponentId);
+    setActiveInviteId(null);
+  };
+
+  const handleCloseInvite = () => {
+    setActiveInviteId(null);
+  };
+
+  const handleCloseGame = () => {
+    setActiveGameId(null);
+    setActiveOpponentId(null);
+  };
 
   if (loading) {
     return (
@@ -179,51 +291,80 @@ const OnlineUsers = () => {
   }
 
   return (
-    <div className="card">
-      <h2 className="text-lg font-semibold mb-4">Friends Online</h2>
-      
-      {onlineUsers.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
-          {friends.length === 0 
-            ? "You don't have any friends yet." 
-            : "No friends are online right now."}
-        </p>
-      ) : (
-        <ul className="space-y-3">
-          {onlineUsers.map(user => (
-            <li key={user.uid} className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                    {user.displayName?.charAt(0).toUpperCase() || '?'}
-                  </div>
-                  {user.isShitting && (
-                    <div className="absolute -top-1 -right-1 bg-accent rounded-full p-1">
-                      <FaToilet className="text-white text-xs" />
+    <>
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-4">Friends Online</h2>
+        
+        {onlineUsers.length === 0 ? (
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            {friends.length === 0 
+              ? "You don't have any friends yet." 
+              : "No friends are online right now."}
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {onlineUsers.map(user => (
+              <li key={user.uid} className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                      {user.displayName?.charAt(0).toUpperCase() || '?'}
                     </div>
-                  )}
+                    {user.isShitting && (
+                      <div className="absolute -top-1 -right-1 bg-accent rounded-full p-1">
+                        <FaToilet className="text-white text-xs" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium">{user.displayName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {user.isShitting ? 'Currently shitting' : 'Online'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">{user.displayName}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {user.isShitting ? 'Currently shitting' : 'Online'}
-                  </p>
-                </div>
-              </div>
-              
-              {user.isShitting && userData?.isShitting && (
-                <button 
-                  onClick={() => sendGameInvite(user.uid)}
-                  className="p-2 text-primary hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
-                >
-                  <FaGamepad />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+                
+                {user.isShitting && userData?.isShitting && (
+                  <button 
+                    onClick={() => sendGameInvite(user.uid, user.displayName)}
+                    className="p-2 text-primary hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
+                    disabled={inviteSendingStatus[user.uid] === 'sending'}
+                  >
+                    {inviteSendingStatus[user.uid] === 'sending' ? (
+                      <div className="animate-spin h-4 w-4 border-t-2 border-b-2 border-primary rounded-full"></div>
+                    ) : inviteSendingStatus[user.uid] === 'sent' ? (
+                      <span className="text-green-500 text-xs">Sent!</span>
+                    ) : inviteSendingStatus[user.uid] === 'error' ? (
+                      <span className="text-red-500 text-xs">Error</span>
+                    ) : (
+                      <FaGamepad />
+                    )}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Game Invite Modal */}
+      {activeInviteId && (
+        <GameInvite 
+          inviteId={activeInviteId}
+          onAccept={handleAcceptInvite}
+          onClose={handleCloseInvite}
+        />
       )}
-    </div>
+
+      {/* Wordle Game Modal */}
+      {activeGameId && activeOpponentId && (
+        <WordleGame 
+          gameId={activeGameId}
+          opponentId={activeOpponentId}
+          onClose={handleCloseGame}
+        />
+      )}
+    </>
   )
 }
 
