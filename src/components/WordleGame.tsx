@@ -51,7 +51,7 @@ const WORDS = [
   'GLEAM', 'GLOSS', 'SHEEN', 'SLICK', 'SLIME',
   'GRIME', 'FILTH', 'DIRTY', 'MUCKY', 'GRIMY',
   'STAIN', 'MARKS', 'SPOTS', 'RINGS', 'LINES',
-  'MOLDS', 'FUNGI', 'GERMS', 'VIRUS', 'BACTS',
+  'MOLDS', 'FUNGI', 'GERMS', 'VIRUS',
   'LYSOL', 'SOAPY', 'SUDSY', 'SWIPE', 'SWEEP',
   'FOAMS', 'BUBBL', 'FROTH', 'SWISH',
   
@@ -112,8 +112,8 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
         const newGameState = docSnapshot.data() as GameState;
         setGameState(newGameState);
         
-        // If the game just completed, show the game over screen
-        if (newGameState.status === 'completed' && !showGameOver) {
+        // If the game is already completed when component mounts or just completed, show the game over screen
+        if (newGameState.status === 'completed') {
           setShowGameOver(true);
         }
       }
@@ -125,7 +125,7 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
     });
 
     return () => unsubscribe();
-  }, [currentUser, gameId, showGameOver]);
+  }, [currentUser, gameId]);
 
   // Initialize game if it doesn't exist
   useEffect(() => {
@@ -212,6 +212,8 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
       if (isCorrect) {
         updates.status = 'completed';
         updates.winner = currentUser.uid;
+        // Set showGameOver to true immediately to prevent double rendering
+        setShowGameOver(true);
       }
       
       await updateDoc(gameRef, updates);
@@ -336,10 +338,10 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
       }
     } catch (error) {
       console.error('Error cleaning up game invite:', error);
+    } finally {
+      // Always call onClose, even if there's an error
+      onClose();
     }
-    
-    // Call the original onClose function immediately
-    onClose();
   };
 
   if (loading) {
