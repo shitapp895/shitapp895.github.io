@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ref, onValue } from 'firebase/database'
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 import { database, firestore } from '../firebase/config'
 import { useAuth } from '../contexts/AuthContext'
 import { FaToilet, FaGamepad } from 'react-icons/fa'
@@ -176,7 +176,60 @@ const OnlineUsers = () => {
 
     const fetchPendingInvites = async () => {
       try {
-        // Query for pending invites where the current user is the receiver
+        // Check for active games first
+        // Check for accepted game invites where the current user is the sender
+        const senderInvitesQuery = query(
+          collection(firestore, 'gameInvites'),
+          where('senderId', '==', currentUser.uid),
+          where('status', '==', 'accepted')
+        );
+
+        const senderInvitesSnapshot = await getDocs(senderInvitesQuery);
+        
+        if (!senderInvitesSnapshot.empty) {
+          const invite = senderInvitesSnapshot.docs[0].data() as GameInviteData;
+          
+          // Check if the game is still active
+          if (invite.gameId) {
+            const gameDoc = await getDoc(doc(firestore, 'wordleGames', invite.gameId));
+            if (gameDoc.exists() && gameDoc.data().status !== 'completed') {
+              setActiveGameId(invite.gameId);
+              setActiveOpponentId(invite.receiverId);
+              return;
+            } else {
+              // If game is completed, clean up the invite
+              await deleteDoc(doc(firestore, 'gameInvites', senderInvitesSnapshot.docs[0].id));
+            }
+          }
+        }
+
+        // Check for accepted game invites where the current user is the receiver
+        const receiverInvitesQuery = query(
+          collection(firestore, 'gameInvites'),
+          where('receiverId', '==', currentUser.uid),
+          where('status', '==', 'accepted')
+        );
+
+        const receiverInvitesSnapshot = await getDocs(receiverInvitesQuery);
+        
+        if (!receiverInvitesSnapshot.empty) {
+          const invite = receiverInvitesSnapshot.docs[0].data() as GameInviteData;
+          
+          // Check if the game is still active
+          if (invite.gameId) {
+            const gameDoc = await getDoc(doc(firestore, 'wordleGames', invite.gameId));
+            if (gameDoc.exists() && gameDoc.data().status !== 'completed') {
+              setActiveGameId(invite.gameId);
+              setActiveOpponentId(invite.senderId);
+              return;
+            } else {
+              // If game is completed, clean up the invite
+              await deleteDoc(doc(firestore, 'gameInvites', receiverInvitesSnapshot.docs[0].id));
+            }
+          }
+        }
+
+        // If no active games, check for pending invites
         const invitesQuery = query(
           collection(firestore, 'gameInvites'),
           where('receiverId', '==', currentUser.uid),

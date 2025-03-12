@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { FaToilet, FaGamepad } from 'react-icons/fa'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs, getDoc, doc, deleteDoc } from 'firebase/firestore'
 import { firestore } from '../firebase/config'
 import WordleGame from '../components/WordleGame'
 
@@ -47,9 +47,19 @@ const Home = () => {
         
         if (!senderInvitesSnapshot.empty) {
           const invite = senderInvitesSnapshot.docs[0].data() as GameInviteData;
-          setActiveGameId(invite.gameId);
-          setActiveOpponentId(invite.receiverId);
-          return;
+          
+          // Check if the game is still active
+          if (invite.gameId) {
+            const gameDoc = await getDoc(doc(firestore, 'wordleGames', invite.gameId));
+            if (gameDoc.exists() && gameDoc.data().status !== 'completed') {
+              setActiveGameId(invite.gameId);
+              setActiveOpponentId(invite.receiverId);
+              return;
+            } else {
+              // If game is completed, clean up the invite
+              await deleteDoc(doc(firestore, 'gameInvites', senderInvitesSnapshot.docs[0].id));
+            }
+          }
         }
 
         // Check for accepted game invites where the current user is the receiver
@@ -63,8 +73,19 @@ const Home = () => {
         
         if (!receiverInvitesSnapshot.empty) {
           const invite = receiverInvitesSnapshot.docs[0].data() as GameInviteData;
-          setActiveGameId(invite.gameId);
-          setActiveOpponentId(invite.senderId);
+          
+          // Check if the game is still active
+          if (invite.gameId) {
+            const gameDoc = await getDoc(doc(firestore, 'wordleGames', invite.gameId));
+            if (gameDoc.exists() && gameDoc.data().status !== 'completed') {
+              setActiveGameId(invite.gameId);
+              setActiveOpponentId(invite.senderId);
+              return;
+            } else {
+              // If game is completed, clean up the invite
+              await deleteDoc(doc(firestore, 'gameInvites', receiverInvitesSnapshot.docs[0].id));
+            }
+          }
         }
       } catch (error) {
         console.error('Error checking for active games:', error);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
 
 interface WordleGameProps {
@@ -22,10 +22,58 @@ interface GameState {
 }
 
 const WORDS = [
+  // Bathroom fixtures and plumbing
   'FLUSH', 'WIPES', 'BIDET', 'STOOL', 'BOWEL',
   'POTTY', 'SQUAT', 'PLUMB', 'WATER', 'PAPER',
   'CLEAN', 'SMELL', 'SPRAY', 'DRAIN', 'FLOAT',
-  'ROYAL', 'WASTE', 'SEWER', 'PIPES', 'VALVE'
+  'ROYAL', 'WASTE', 'SEWER', 'PIPES', 'VALVE',
+  'BASIN', 'FECAL', 'URINE', 'POOPS', 'POOHS',
+  'CRAPS', 'DUMPS', 'TURDS', 'DOOKS', 'LOAFS',
+  'SINKS', 'TANKS', 'SEATS', 'LATCH', 'LEVER',
+  'CHAIN', 'KNOBS', 'HINGE', 'LOCKS', 'DOORS',
+  'STALL', 'WALLS', 'TILES', 'GROUT', 'CAULK',
+  'DRIPS', 'LEAKS', 'CLOGS', 'BACKS', 'FLOWS',
+  'SWIRL', 'WHIRL', 'SPINS', 'DROPS', 'FALLS',
+  'ROLLS', 'SHEET', 'CLOTH', 'BRUSH',
+  
+  // Bathroom activities and experiences
+  'GOING', 'DOING', 'VISIT', 'BREAK', 'RELAX',
+  'EMPTY', 'PURGE', 'EXPEL', 'GRUNT',
+  'PINCH', 'PRESS', 'SHITS', 'FORCE',
+  'QUIET', 'PEACE', 'ALONE', 'SPACE',
+  'READS', 'PHONE', 'GAMES', 'TEXTS', 'WAITS',
+  'HURRY', 'QUICK', 'RUSHS', 'TARDY', 'LATER',
+  'STINK', 'ODORS', 'SCENT', 'WHIFF',
+  'FRESH', 'MISTS', 'VAPOR', 'STEAM',
+  
+  // Bathroom cleaning and maintenance
+  'SCRUB', 'MOPUP', 'RINSE', 'SHINE',
+  'GLEAM', 'GLOSS', 'SHEEN', 'SLICK', 'SLIME',
+  'GRIME', 'FILTH', 'DIRTY', 'MUCKY', 'GRIMY',
+  'STAIN', 'MARKS', 'SPOTS', 'RINGS', 'LINES',
+  'MOLDS', 'FUNGI', 'GERMS', 'VIRUS', 'BACTS',
+  'LYSOL', 'SOAPY', 'SUDSY', 'SWIPE', 'SWEEP',
+  'FOAMS', 'BUBBL', 'FROTH', 'SWISH',
+  
+  // Toilet parts and types
+  'BOWLS', 'BASES', 'BENDS', 'TRAPS',
+  'FLAPS', 'PEDAL', 'TOUCH', 'SENSE',
+  'ROUND', 'JOHNS', 'HEADS',
+  'ROOMS', 'CABIN', 'VENTS',
+  
+  // Toilet paper and hygiene products
+  'PLUSH', 'THICK', 'ROUGH',
+  'FOLDS', 'MOIST', 'WETTY', 'DRYER', 'TOWEL',
+  'SOAPS', 'HANDS', 'PALMS', 'NAILS',
+  
+  // Plumbing and water-related
+  'FLOWS', 'DUCTS',
+  'MAINS', 'LINES', 'ROUTE',
+  'PUMPS', 'POWER', 'BOOST',
+  'GATES', 'STOPS', 'BLOCK', 'CLOGS',
+  'DRIPS', 'DROPS', 'SPILL', 'FLOOD',
+  'POOLS', 'SPINS', 'TWIST',
+  'SOUND', 'NOISE'
 ];
 
 const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
@@ -245,6 +293,45 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
     );
   };
 
+  // Clean up game invite when closing
+  const handleClose = async () => {
+    try {
+      // Find and delete the game invite
+      if (currentUser) {
+        // Check if user is sender
+        const senderQuery = query(
+          collection(firestore, 'gameInvites'),
+          where('senderId', '==', currentUser.uid),
+          where('gameId', '==', gameId)
+        );
+        
+        const senderResults = await getDocs(senderQuery);
+        
+        if (!senderResults.empty) {
+          await deleteDoc(doc(firestore, 'gameInvites', senderResults.docs[0].id));
+        } else {
+          // Check if user is receiver
+          const receiverQuery = query(
+            collection(firestore, 'gameInvites'),
+            where('receiverId', '==', currentUser.uid),
+            where('gameId', '==', gameId)
+          );
+          
+          const receiverResults = await getDocs(receiverQuery);
+          
+          if (!receiverResults.empty) {
+            await deleteDoc(doc(firestore, 'gameInvites', receiverResults.docs[0].id));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up game invite:', error);
+    }
+    
+    // Call the original onClose function
+    onClose();
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -260,7 +347,7 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Toilet Wordle</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <button onClick={handleClose} className="text-gray-500 hover:text-gray-700">
             ✕
           </button>
         </div>
@@ -326,7 +413,7 @@ const WordleGame = ({ gameId, opponentId, onClose }: WordleGameProps) => {
               <div className="text-center mt-4">
                 <p className="mb-2">The word was: <span className="font-bold">{gameState.word}</span></p>
                 <button 
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="px-4 py-2 bg-primary text-white rounded"
                 >
                   Close Game
