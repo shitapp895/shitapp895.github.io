@@ -58,6 +58,7 @@ const Tweets = () => {
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
+  const [lastAutoRefresh, setLastAutoRefresh] = useState(0);
 
   // Load friends list
   useEffect(() => {
@@ -96,15 +97,20 @@ const Tweets = () => {
       
       // Check cache first if not forcing refresh
       if (!forceRefresh) {
-        const cachedTweets = getCachedTimeline(friends);
-        if (cachedTweets && cachedTweets.length > 0) {
-          setTweets(cachedTweets);
+        const cachedData = getCachedTimeline(friends);
+        if (cachedData && cachedData.tweets.length > 0) {
+          setTweets(cachedData.tweets);
           setLoading(false);
           
-          // Refresh in background after showing cached results
-          setTimeout(() => {
-            loadTweets(true).catch(console.error);
-          }, 100);
+          // Only auto-refresh if it's been more than 5 minutes since the last refresh
+          const now = Date.now();
+          if (now - lastAutoRefresh > 5 * 60 * 1000) {
+            setLastAutoRefresh(now);
+            // Quietly check for updates in the background
+            setTimeout(() => {
+              loadTweets(true).catch(console.error);
+            }, 2000); // Wait 2 seconds to avoid immediate reload
+          }
           return;
         }
       }
@@ -114,7 +120,7 @@ const Tweets = () => {
       
       setTweets(result.tweets);
       setLastDoc(result.lastDoc);
-      setHasMore(result.tweets.length === 5); // Changed from 20 to 5
+      setHasMore(result.tweets.length === 5);
       
     } catch (err: any) {
       console.error('Error loading tweets:', err);
@@ -123,7 +129,7 @@ const Tweets = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentUser, friends, tweets.length]);
+  }, [currentUser, friends, tweets.length, lastAutoRefresh]);
 
   // Load more tweets when scrolling
   const loadMoreTweets = useCallback(async () => {
@@ -137,7 +143,7 @@ const Tweets = () => {
       if (result.tweets.length > 0) {
         setTweets(prev => [...prev, ...result.tweets]);
         setLastDoc(result.lastDoc);
-        setHasMore(result.tweets.length === 5); // Changed from 20 to 5
+        setHasMore(result.tweets.length === 5);
       } else {
         setHasMore(false);
       }
@@ -196,7 +202,7 @@ const Tweets = () => {
       
       setNewTweetContent('');
       
-      // Refresh the timeline
+      // Refresh the timeline after posting a new tweet
       loadTweets(true);
       
     } catch (err: any) {

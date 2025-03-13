@@ -6,17 +6,18 @@ export function generateFriendsHash(friends: string[]): string {
 }
 
 // Save timeline to cache
-export function cacheTimeline(tweets: Tweet[], friends: string[]): void {
+export function cacheTimeline(tweets: Tweet[], friends: string[], lastLoadedActivity?: number): void {
   const cache: TimelineCache = {
     tweets,
     lastUpdated: Date.now(),
-    friendsHash: generateFriendsHash(friends)
+    friendsHash: generateFriendsHash(friends),
+    lastLoadedActivity: lastLoadedActivity || Date.now()
   };
   localStorage.setItem('timeline_cache', JSON.stringify(cache));
 }
 
 // Get cached timeline if valid
-export function getCachedTimeline(friends: string[], maxAge = 5 * 60 * 1000): Tweet[] | null {
+export function getCachedTimeline(friends: string[], maxAge = 5 * 60 * 1000): TimelineCache | null {
   try {
     const cacheJson = localStorage.getItem('timeline_cache');
     if (!cacheJson) return null;
@@ -30,7 +31,7 @@ export function getCachedTimeline(friends: string[], maxAge = 5 * 60 * 1000): Tw
       return null;
     }
     
-    return cache.tweets;
+    return cache;
   } catch (error) {
     console.error('Error retrieving cached timeline:', error);
     return null;

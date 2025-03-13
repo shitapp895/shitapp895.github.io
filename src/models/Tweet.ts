@@ -16,4 +16,13 @@ export interface TimelineCache {
   tweets: Tweet[];
   lastUpdated: number;
   friendsHash: string; // Hash of friends list to detect changes
+  lastLoadedActivity?: number; // Timestamp of the last activity we've loaded
+}
+
+// New interface for tracking tweet activity
+export interface TweetActivity {
+  id?: string;
+  userId: string;
+  tweetId: string;
+  timestamp: Timestamp;
 } 

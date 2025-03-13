@@ -12,13 +12,17 @@ import {
   getDoc,
   Timestamp,
   startAfter,
-  QueryDocumentSnapshot
+  QueryDocumentSnapshot,
+  writeBatch,
+  serverTimestamp,
+  setDoc
 } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
-import { Tweet } from '../models/Tweet';
-import { cacheTimeline } from '../utils/tweetCache';
+import { Tweet, TweetActivity } from '../models/Tweet';
+import { cacheTimeline, getCachedTimeline } from '../utils/tweetCache';
 
 const TWEETS_COLLECTION = 'tweets';
+const TWEET_ACTIVITY_COLLECTION = 'tweetActivity';
 const TWEETS_PER_PAGE = 5;
 
 // Create a new tweet
@@ -31,58 +35,243 @@ export async function createTweet(tweet: Omit<Tweet, 'id' | 'likes' | 'likedBy' 
       likedBy: []
     };
     
-    const docRef = await addDoc(collection(firestore, TWEETS_COLLECTION), tweetData);
-    return docRef.id;
+    // Use a batch write to create both the tweet and activity log entry
+    const batch = writeBatch(firestore);
+    
+    // Add the tweet
+    const tweetRef = doc(collection(firestore, TWEETS_COLLECTION));
+    batch.set(tweetRef, tweetData);
+    
+    // Create activity log entry
+    const activityData: Omit<TweetActivity, 'id'> = {
+      userId: tweet.authorId,
+      tweetId: tweetRef.id,
+      timestamp: Timestamp.now()
+    };
+    
+    const activityRef = doc(collection(firestore, TWEET_ACTIVITY_COLLECTION));
+    batch.set(activityRef, activityData);
+    
+    // Commit the batch
+    await batch.commit();
+    
+    return tweetRef.id;
   } catch (error) {
     console.error('Error creating tweet:', error);
     throw error;
   }
 }
 
-// Get tweets for timeline (from user and their friends)
-export async function getTimelineTweets(currentUserId: string, friends: string[], lastDoc?: QueryDocumentSnapshot): Promise<{ tweets: Tweet[], lastDoc?: QueryDocumentSnapshot }> {
+// Get recent tweet activity for a user's friends
+export async function getRecentTweetActivity(
+  friendIds: string[],
+  lastTimestamp?: number
+): Promise<TweetActivity[]> {
   try {
-    // Include the current user to see their own tweets
-    const authors = [...friends, currentUserId];
+    if (!friendIds || friendIds.length === 0) return [];
     
-    let timelineQuery;
+    // Create a query to find recent activity from friends
+    let activityQuery;
     
-    if (lastDoc) {
-      // Pagination query
-      timelineQuery = query(
+    if (lastTimestamp) {
+      // Only get activity newer than the last loaded
+      const lastDate = new Date(lastTimestamp);
+      activityQuery = query(
+        collection(firestore, TWEET_ACTIVITY_COLLECTION),
+        where('userId', 'in', friendIds),
+        where('timestamp', '>', Timestamp.fromDate(lastDate)),
+        orderBy('timestamp', 'desc'),
+        limit(50) // Get a reasonable batch of activity
+      );
+    } else {
+      // Get the most recent activity
+      activityQuery = query(
+        collection(firestore, TWEET_ACTIVITY_COLLECTION),
+        where('userId', 'in', friendIds),
+        orderBy('timestamp', 'desc'),
+        limit(50) // Get a reasonable batch of activity
+      );
+    }
+    
+    const activitySnapshot = await getDocs(activityQuery);
+    
+    // Map to activity objects
+    return activitySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as TweetActivity[];
+  } catch (error) {
+    console.error('Error fetching recent tweet activity:', error);
+    throw error;
+  }
+}
+
+// Get tweets by IDs (for efficient loading)
+export async function getTweetsByIds(tweetIds: string[]): Promise<Tweet[]> {
+  try {
+    if (!tweetIds || tweetIds.length === 0) return [];
+    
+    // Firebase has a limit of 10 items for 'in' queries
+    // So we need to batch our requests if we have more than 10 ids
+    const tweets: Tweet[] = [];
+    
+    // Process in batches of 10
+    for (let i = 0; i < tweetIds.length; i += 10) {
+      const batchIds = tweetIds.slice(i, i + 10);
+      
+      const tweetQuery = query(
+        collection(firestore, TWEETS_COLLECTION),
+        where('__name__', 'in', batchIds)
+      );
+      
+      const tweetSnapshot = await getDocs(tweetQuery);
+      
+      // Add the tweets from this batch
+      tweetSnapshot.forEach(doc => {
+        tweets.push({
+          id: doc.id,
+          ...doc.data()
+        } as Tweet);
+      });
+    }
+    
+    // Sort tweets by created date (newest first)
+    return tweets.sort((a, b) => {
+      // Convert to milliseconds for comparison
+      const timeA = typeof a.createdAt === 'number' 
+        ? a.createdAt 
+        : a.createdAt.toMillis();
+      
+      const timeB = typeof b.createdAt === 'number' 
+        ? b.createdAt 
+        : b.createdAt.toMillis();
+      
+      return timeB - timeA;
+    });
+  } catch (error) {
+    console.error('Error fetching tweets by ids:', error);
+    throw error;
+  }
+}
+
+// Get tweets for timeline (from user and their friends)
+export async function getTimelineTweets(
+  currentUserId: string, 
+  friends: string[], 
+  lastDoc?: QueryDocumentSnapshot
+): Promise<{ tweets: Tweet[], lastDoc?: QueryDocumentSnapshot }> {
+  try {
+    // Check for cached timeline first
+    const cachedTimeline = getCachedTimeline(friends);
+    let result: { tweets: Tweet[], lastDoc?: QueryDocumentSnapshot } = { tweets: [] };
+    
+    if (cachedTimeline && !lastDoc) {
+      // We have a cache, now check for new activity since the last load
+      const lastLoadedActivity = cachedTimeline.lastLoadedActivity || 0;
+      const latestActivity = await getRecentTweetActivity(
+        [...friends, currentUserId], 
+        lastLoadedActivity
+      );
+      
+      if (latestActivity.length === 0) {
+        // No new activity, return cached tweets
+        return { tweets: cachedTimeline.tweets };
+      }
+      
+      // Get the new tweets 
+      const newTweetIds = latestActivity.map(activity => activity.tweetId);
+      const newTweets = await getTweetsByIds(newTweetIds);
+      
+      // Update cache with the new tweets merged with existing ones
+      const allTweets = [...newTweets, ...cachedTimeline.tweets];
+      
+      // Remove duplicates based on id
+      const uniqueTweets = allTweets.filter((tweet, index, self) => 
+        index === self.findIndex(t => t.id === tweet.id)
+      );
+      
+      // Sort by date
+      uniqueTweets.sort((a, b) => {
+        const timeA = typeof a.createdAt === 'number' 
+          ? a.createdAt 
+          : a.createdAt.toMillis();
+        
+        const timeB = typeof b.createdAt === 'number' 
+          ? b.createdAt 
+          : b.createdAt.toMillis();
+        
+        return timeB - timeA;
+      });
+      
+      // Get the latest activity timestamp
+      const lastActivityTimestamp = latestActivity.length > 0 
+        ? latestActivity[0].timestamp.toMillis()
+        : lastLoadedActivity;
+      
+      // Cache the updated timeline
+      cacheTimeline(uniqueTweets, friends, lastActivityTimestamp);
+      
+      // Return the first page of tweets
+      return { 
+        tweets: uniqueTweets.slice(0, TWEETS_PER_PAGE),
+        // Use the last doc reference if we need pagination
+        lastDoc: lastDoc
+      };
+    } else if (lastDoc) {
+      // This is a pagination request, use the traditional method
+      // Include the current user to see their own tweets
+      const authors = [...friends, currentUserId];
+      
+      const timelineQuery = query(
         collection(firestore, TWEETS_COLLECTION),
         where('authorId', 'in', authors),
         orderBy('createdAt', 'desc'),
         startAfter(lastDoc),
         limit(TWEETS_PER_PAGE)
       );
+      
+      const tweetsSnapshot = await getDocs(timelineQuery);
+      const lastVisible = tweetsSnapshot.docs[tweetsSnapshot.docs.length - 1];
+      
+      const paginatedTweets = tweetsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Tweet[];
+      
+      return { 
+        tweets: paginatedTweets, 
+        lastDoc: lastVisible
+      };
     } else {
-      // Initial query
-      timelineQuery = query(
-        collection(firestore, TWEETS_COLLECTION),
-        where('authorId', 'in', authors),
-        orderBy('createdAt', 'desc'),
-        limit(TWEETS_PER_PAGE)
+      // No cache or forced refresh, load the full timeline
+      // First, get the recent activity to know which tweets to fetch
+      const recentActivity = await getRecentTweetActivity(
+        [...friends, currentUserId]
       );
+      
+      if (recentActivity.length === 0) {
+        // No activity, return empty array
+        return { tweets: [] };
+      }
+      
+      // Get the tweets from the activity
+      const tweetIds = recentActivity.map(activity => activity.tweetId);
+      const tweets = await getTweetsByIds(tweetIds);
+      
+      // Get the latest activity timestamp
+      const lastActivityTimestamp = recentActivity.length > 0 
+        ? recentActivity[0].timestamp.toMillis()
+        : Date.now();
+      
+      // Cache the timeline
+      cacheTimeline(tweets, friends, lastActivityTimestamp);
+      
+      // Return the first page
+      return {
+        tweets: tweets.slice(0, TWEETS_PER_PAGE),
+        lastDoc: undefined // No pagination for now
+      };
     }
-    
-    const tweetsSnapshot = await getDocs(timelineQuery);
-    const lastVisible = tweetsSnapshot.docs[tweetsSnapshot.docs.length - 1];
-    
-    const tweets = tweetsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Tweet[];
-    
-    // Cache the results if it's the initial load
-    if (!lastDoc) {
-      cacheTimeline(tweets, friends);
-    }
-    
-    return { 
-      tweets, 
-      lastDoc: lastVisible
-    };
   } catch (error) {
     console.error('Error fetching timeline tweets:', error);
     throw error;
@@ -137,7 +326,24 @@ export async function deleteTweet(tweetId: string, userId: string): Promise<void
       throw new Error('Not authorized to delete this tweet');
     }
     
-    await deleteDoc(tweetRef);
+    // Use a batch to delete both the tweet and its activity entry
+    const batch = writeBatch(firestore);
+    
+    // Delete the tweet
+    batch.delete(tweetRef);
+    
+    // Find and delete the activity entry
+    const activityQuery = query(
+      collection(firestore, TWEET_ACTIVITY_COLLECTION),
+      where('tweetId', '==', tweetId)
+    );
+    
+    const activitySnapshot = await getDocs(activityQuery);
+    activitySnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    await batch.commit();
   } catch (error) {
     console.error('Error deleting tweet:', error);
     throw error;
