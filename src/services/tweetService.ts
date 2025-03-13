@@ -5,17 +5,13 @@ import {
   orderBy, 
   limit, 
   getDocs, 
-  addDoc, 
   updateDoc, 
-  deleteDoc, 
   doc, 
   getDoc,
   Timestamp,
   startAfter,
   QueryDocumentSnapshot,
-  writeBatch,
-  serverTimestamp,
-  setDoc
+  writeBatch
 } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
 import { Tweet, TweetActivity } from '../models/Tweet';
@@ -70,36 +66,53 @@ export async function getRecentTweetActivity(
   try {
     if (!friendIds || friendIds.length === 0) return [];
     
-    // Create a query to find recent activity from friends
-    let activityQuery;
+    const allActivityDocs: TweetActivity[] = [];
     
-    if (lastTimestamp) {
-      // Only get activity newer than the last loaded
-      const lastDate = new Date(lastTimestamp);
-      activityQuery = query(
-        collection(firestore, TWEET_ACTIVITY_COLLECTION),
-        where('userId', 'in', friendIds),
-        where('timestamp', '>', Timestamp.fromDate(lastDate)),
-        orderBy('timestamp', 'desc'),
-        limit(50) // Get a reasonable batch of activity
-      );
-    } else {
-      // Get the most recent activity
-      activityQuery = query(
-        collection(firestore, TWEET_ACTIVITY_COLLECTION),
-        where('userId', 'in', friendIds),
-        orderBy('timestamp', 'desc'),
-        limit(50) // Get a reasonable batch of activity
-      );
+    // Process friends in batches of 10 (Firestore 'in' query limit)
+    for (let i = 0; i < friendIds.length; i += 10) {
+      const batchFriendIds = friendIds.slice(i, i + 10);
+      
+      // Create a query to find recent activity from this batch of friends
+      let batchActivityQuery;
+      
+      if (lastTimestamp) {
+        // Only get activity newer than the last loaded
+        const lastDate = new Date(lastTimestamp);
+        batchActivityQuery = query(
+          collection(firestore, TWEET_ACTIVITY_COLLECTION),
+          where('userId', 'in', batchFriendIds),
+          where('timestamp', '>', Timestamp.fromDate(lastDate)),
+          orderBy('timestamp', 'desc'),
+          limit(50) // Get a reasonable batch of activity
+        );
+      } else {
+        // Get the most recent activity
+        batchActivityQuery = query(
+          collection(firestore, TWEET_ACTIVITY_COLLECTION),
+          where('userId', 'in', batchFriendIds),
+          orderBy('timestamp', 'desc'),
+          limit(50) // Get a reasonable batch of activity
+        );
+      }
+      
+      const activitySnapshot = await getDocs(batchActivityQuery);
+      
+      // Add the results from this batch
+      activitySnapshot.docs.forEach(doc => {
+        allActivityDocs.push({
+          id: doc.id,
+          ...doc.data()
+        } as TweetActivity);
+      });
     }
     
-    const activitySnapshot = await getDocs(activityQuery);
+    // Sort all activities by timestamp (newest first)
+    allActivityDocs.sort((a, b) => 
+      b.timestamp.toMillis() - a.timestamp.toMillis()
+    );
     
-    // Map to activity objects
-    return activitySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as TweetActivity[];
+    // Limit to 50 most recent activities overall
+    return allActivityDocs.slice(0, 50);
   } catch (error) {
     console.error('Error fetching recent tweet activity:', error);
     throw error;
@@ -163,7 +176,6 @@ export async function getTimelineTweets(
   try {
     // Check for cached timeline first
     const cachedTimeline = getCachedTimeline(friends);
-    let result: { tweets: Tweet[], lastDoc?: QueryDocumentSnapshot } = { tweets: [] };
     
     if (cachedTimeline && !lastDoc) {
       // We have a cache, now check for new activity since the last load
