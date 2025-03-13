@@ -378,8 +378,10 @@ const Friends = () => {
         
         setSuccess(`Friend request sent to ${user.displayName}!`)
         
-        // Refresh recommendations after sending a request - silent refresh
-        await refreshRecommendations(false)
+        // Refresh recommendations after sending a request - silent refresh with 1-second delay
+        setTimeout(() => {
+          refreshRecommendations(false);
+        }, 1000);
       } catch (writeErr: any) {
         console.error('Error writing friend request to Firestore:', writeErr)
         if (writeErr.code === 'permission-denied') {
@@ -791,13 +793,15 @@ const Friends = () => {
                     <FaUserPlus className="mr-1" /> Send
                   </button>
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       // First remove this recommendation
                       ignoreRecommendation(recommendation.uid);
                       setRecommendations(prev => prev.filter(rec => rec.uid !== recommendation.uid));
                       
-                      // Then refresh recommendations to get new ones - silent refresh
-                      await refreshRecommendations(false);
+                      // Then refresh recommendations to get new ones after a 1-second delay
+                      setTimeout(() => {
+                        refreshRecommendations(false);
+                      }, 1000);
                     }}
                     className="bg-gray-500 text-white px-3 py-1 rounded flex items-center"
                     disabled={loading}

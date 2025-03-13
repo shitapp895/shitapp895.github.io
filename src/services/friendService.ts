@@ -4,10 +4,7 @@ import {
   where, 
   getDocs, 
   doc, 
-  getDoc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove
+  getDoc
 } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
 
@@ -83,7 +80,7 @@ function calculateRecommendations(
   const candidatesMap = new Map<string, number>(); // uid -> mutual friends count
   
   // Count mutual friends for each friend-of-friend
-  for (const [friendId, friendsFriends] of friendsOfFriends.entries()) {
+  for (const friendsFriends of friendsOfFriends.values()) {
     for (const potentialFriend of friendsFriends) {
       // Skip if this is the current user or already a friend
       if (potentialFriend === currentUserId || currentUserFriendsSet.has(potentialFriend)) {
