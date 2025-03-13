@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { FaUserFriends, FaSearch, FaUserPlus, FaTrash, FaCheck, FaTimes } from 'react-icons/fa'
+import { FaUserFriends, FaSearch, FaUserPlus, FaTrash, FaCheck, FaTimes, FaUserCircle } from 'react-icons/fa'
 import { 
   collection, 
   query, 
@@ -16,6 +16,7 @@ import {
   writeBatch
 } from 'firebase/firestore'
 import { firestore } from '../firebase/config'
+import { getFriendRecommendations, ignoreRecommendation, RecommendedFriend } from '../services/friendService'
 
 interface User {
   uid: string
@@ -40,6 +41,7 @@ const Friends = () => {
   const [friends, setFriends] = useState<User[]>([])
   const [sentRequests, setSentRequests] = useState<FriendRequest[]>([])
   const [receivedRequests, setReceivedRequests] = useState<FriendRequest[]>([])
+  const [recommendations, setRecommendations] = useState<RecommendedFriend[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -112,36 +114,25 @@ const Friends = () => {
             where('status', '==', 'pending')
           )
           
-          const sentRequestsSnapshot = await getDocs(sentRequestsQuery)
+          const sentRequestsDocs = await getDocs(sentRequestsQuery)
           const sentRequestsList: FriendRequest[] = []
           
-          for (const reqDoc of sentRequestsSnapshot.docs) {
-            const reqData = reqDoc.data()
-            
-            try {
-              // Get receiver details
-              const receiverDoc = await getDoc(doc(firestore, 'users', reqData.receiverId))
-              if (receiverDoc.exists()) {
-                const receiverData = receiverDoc.data();
-                sentRequestsList.push({
-                  id: reqDoc.id,
-                  sender: {
-                    uid: currentUser.uid,
-                    displayName: currentUser.displayName || 'Unknown',
-                    email: currentUser.email || ''
-                  },
-                  receiver: reqData.receiverId,
-                  receiverName: receiverData.displayName || 'Unknown User',
-                  receiverEmail: receiverData.email || '',
-                  status: reqData.status,
-                  createdAt: reqData.createdAt?.toDate() || new Date()
-                })
-              }
-            } catch (receiverErr) {
-              console.warn('Error fetching receiver details:', receiverErr)
-              // Skip this request
-            }
-          }
+          sentRequestsDocs.forEach(doc => {
+            const data = doc.data()
+            sentRequestsList.push({
+              id: doc.id,
+              sender: {
+                uid: currentUser.uid,
+                displayName: currentUser.displayName || 'Unknown',
+                email: currentUser.email || ''
+              },
+              receiver: data.receiverId,
+              receiverName: data.receiverName,
+              receiverEmail: data.receiverEmail,
+              status: data.status,
+              createdAt: data.createdAt.toDate()
+            })
+          })
           
           setSentRequests(sentRequestsList)
           
@@ -152,44 +143,52 @@ const Friends = () => {
             where('status', '==', 'pending')
           )
           
-          const receivedRequestsSnapshot = await getDocs(receivedRequestsQuery)
+          const receivedRequestsDocs = await getDocs(receivedRequestsQuery)
           const receivedRequestsList: FriendRequest[] = []
           
-          for (const reqDoc of receivedRequestsSnapshot.docs) {
-            const reqData = reqDoc.data()
+          for (const docSnapshot of receivedRequestsDocs.docs) {
+            const data = docSnapshot.data()
             
+            // Fetch sender details
             try {
-              // Get sender details
-              const senderDoc = await getDoc(doc(firestore, 'users', reqData.senderId))
-              if (senderDoc.exists()) {
-                const senderData = senderDoc.data()
-                
+              const senderDocRef = doc(firestore, 'users', data.senderId)
+              const senderDocSnapshot = await getDoc(senderDocRef)
+              
+              if (senderDocSnapshot.exists()) {
+                const senderData = senderDocSnapshot.data()
                 receivedRequestsList.push({
-                  id: reqDoc.id,
+                  id: docSnapshot.id,
                   sender: {
-                    uid: reqData.senderId,
+                    uid: data.senderId,
                     displayName: senderData.displayName || 'Unknown User',
                     email: senderData.email || ''
                   },
                   receiver: currentUser.uid,
-                  receiverName: currentUser.displayName || 'Unknown',
-                  receiverEmail: currentUser.email || '',
-                  status: reqData.status,
-                  createdAt: reqData.createdAt?.toDate() || new Date()
+                  status: data.status,
+                  createdAt: data.createdAt.toDate()
                 })
               }
-            } catch (senderErr) {
-              console.warn('Error fetching sender details:', senderErr)
-              // Skip this request
+            } catch (senderFetchErr) {
+              console.error('Error fetching sender details:', senderFetchErr)
             }
           }
           
           setReceivedRequests(receivedRequestsList)
-        } catch (requestsErr) {
-          console.warn('Error fetching friend requests:', requestsErr)
-          // This might happen if the friendRequests collection doesn't exist yet
+        } catch (requestsFetchErr) {
+          console.error('Error fetching friend requests:', requestsFetchErr)
+          // Continue with empty requests lists
           setSentRequests([])
           setReceivedRequests([])
+        }
+        
+        // Fetch friend recommendations
+        try {
+          const recommendations = await getFriendRecommendations(currentUser.uid, 5, 10);
+          setRecommendations(recommendations);
+        } catch (recommendationsErr) {
+          console.error('Error fetching friend recommendations:', recommendationsErr);
+          // Continue with empty recommendations
+          setRecommendations([]);
         }
       } catch (err: any) {
         console.error('Error in fetchFriendsAndRequests:', err)
@@ -198,7 +197,7 @@ const Friends = () => {
         setLoading(false)
       }
     }
-
+    
     fetchFriendsAndRequests()
   }, [currentUser])
 
@@ -789,6 +788,49 @@ const Friends = () => {
           </div>
         )}
       </div>
+      
+      {/* Friend Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold mb-4">People You May Know</h2>
+          <div className="space-y-2">
+            {recommendations.map(recommendation => (
+              <div key={recommendation.uid} className="border p-3 rounded flex justify-between items-center">
+                <div>
+                  <div className="font-medium">{recommendation.displayName}</div>
+                  <div className="text-sm text-gray-600">{recommendation.email}</div>
+                  <div className="text-xs text-gray-500">
+                    {recommendation.mutualFriends} mutual friend{recommendation.mutualFriends !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => sendFriendRequest({
+                      uid: recommendation.uid,
+                      displayName: recommendation.displayName,
+                      email: recommendation.email
+                    })}
+                    className="bg-blue-500 text-white px-3 py-1 rounded flex items-center"
+                    disabled={loading}
+                  >
+                    <FaUserPlus className="mr-1" /> Send
+                  </button>
+                  <button
+                    onClick={() => {
+                      ignoreRecommendation(recommendation.uid);
+                      setRecommendations(prev => prev.filter(rec => rec.uid !== recommendation.uid));
+                    }}
+                    className="bg-gray-500 text-white px-3 py-1 rounded flex items-center"
+                    disabled={loading}
+                  >
+                    <FaTimes className="mr-1" /> Ignore
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
