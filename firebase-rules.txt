@@ -102,6 +102,13 @@ service cloud.firestore {
       // Allow updating or deleting a tweet if you're the author
       allow update, delete: if request.auth != null && 
                              resource.data.authorId == request.auth.uid;
+                             
+      // Allow friends to update only the likes and likedBy fields
+      allow update: if request.auth != null && 
+                     resource.data.authorId != request.auth.uid &&
+                     (exists(/databases/$(database)/documents/users/$(resource.data.authorId)/friends/$(request.auth.uid)) ||
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(resource.data.authorId))) &&
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy']);
     }
   }
 }
