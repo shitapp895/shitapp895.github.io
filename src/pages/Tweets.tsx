@@ -12,8 +12,6 @@ import { firestore } from '../firebase/config';
 // Helper function to safely format tweet dates
 const formatTweetDate = (createdAt: any): string => {
   try {
-    console.log('Tweet createdAt type:', typeof createdAt, createdAt);
-    
     // Handle null or undefined
     if (!createdAt) return 'Unknown date';
     
@@ -34,11 +32,29 @@ const formatTweetDate = (createdAt: any): string => {
     
     // If it's a string that can be parsed as a date
     if (typeof createdAt === 'string') {
-      return new Date(createdAt).toLocaleString();
+      try {
+        return new Date(createdAt).toLocaleString();
+      } catch (e) {
+        return createdAt; // Return the string directly if it can't be parsed
+      }
     }
     
-    // Fallback - just convert to string
-    return String(createdAt);
+    // For nested objects/timestamps that might have different formats
+    if (typeof createdAt === 'object' && createdAt !== null) {
+      // If it has seconds and nanoseconds (Firestore timestamp format)
+      if ('seconds' in createdAt && 'nanoseconds' in createdAt) {
+        return new Date(createdAt.seconds * 1000).toLocaleString();
+      }
+      
+      // If it has a timestamp property
+      if ('timestamp' in createdAt && createdAt.timestamp) {
+        return formatTweetDate(createdAt.timestamp); // Recursively format the timestamp
+      }
+    }
+    
+    // Last fallback - convert to string but handle [object Object]
+    const stringValue = String(createdAt);
+    return stringValue === '[object Object]' ? 'Unknown date' : stringValue;
   } catch (error) {
     console.error('Error formatting date:', error, 'Value was:', createdAt);
     return 'Invalid date';
