@@ -183,7 +183,15 @@ const Friends = () => {
         
         // Fetch friend recommendations
         try {
-          const recommendations = await getFriendRecommendations(currentUser.uid, 5, 10);
+          // Get IDs of users with pending friend requests
+          const sentRequestIds = sentRequests.map((request: FriendRequest) => request.receiver);
+          
+          const recommendations = await getFriendRecommendations(
+            currentUser.uid, 
+            5, 
+            10,
+            sentRequestIds
+          );
           setRecommendations(recommendations);
         } catch (recommendationsErr) {
           console.error('Error fetching friend recommendations:', recommendationsErr);
@@ -700,6 +708,49 @@ const Friends = () => {
         )}
       </div>
       
+      {/* Friend Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">People You May Know</h2>
+          <div className="space-y-2">
+            {recommendations.map(recommendation => (
+              <div key={recommendation.uid} className="border p-3 rounded flex justify-between items-center">
+                <div>
+                  <div className="font-medium">{recommendation.displayName}</div>
+                  <div className="text-sm text-gray-600">{recommendation.email}</div>
+                  <div className="text-xs text-gray-500">
+                    {recommendation.mutualFriends} mutual friend{recommendation.mutualFriends !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => sendFriendRequest({
+                      uid: recommendation.uid,
+                      displayName: recommendation.displayName,
+                      email: recommendation.email
+                    })}
+                    className="bg-blue-500 text-white px-3 py-1 rounded flex items-center"
+                    disabled={loading}
+                  >
+                    <FaUserPlus className="mr-1" /> Send
+                  </button>
+                  <button
+                    onClick={() => {
+                      ignoreRecommendation(recommendation.uid);
+                      setRecommendations(prev => prev.filter(rec => rec.uid !== recommendation.uid));
+                    }}
+                    className="bg-gray-500 text-white px-3 py-1 rounded flex items-center"
+                    disabled={loading}
+                  >
+                    <FaTimes className="mr-1" /> Ignore
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
       {/* Friend Requests */}
       {receivedRequests.length > 0 && (
         <div className="mb-8">
@@ -788,49 +839,6 @@ const Friends = () => {
           </div>
         )}
       </div>
-      
-      {/* Friend Recommendations */}
-      {recommendations.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold mb-4">People You May Know</h2>
-          <div className="space-y-2">
-            {recommendations.map(recommendation => (
-              <div key={recommendation.uid} className="border p-3 rounded flex justify-between items-center">
-                <div>
-                  <div className="font-medium">{recommendation.displayName}</div>
-                  <div className="text-sm text-gray-600">{recommendation.email}</div>
-                  <div className="text-xs text-gray-500">
-                    {recommendation.mutualFriends} mutual friend{recommendation.mutualFriends !== 1 ? 's' : ''}
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => sendFriendRequest({
-                      uid: recommendation.uid,
-                      displayName: recommendation.displayName,
-                      email: recommendation.email
-                    })}
-                    className="bg-blue-500 text-white px-3 py-1 rounded flex items-center"
-                    disabled={loading}
-                  >
-                    <FaUserPlus className="mr-1" /> Send
-                  </button>
-                  <button
-                    onClick={() => {
-                      ignoreRecommendation(recommendation.uid);
-                      setRecommendations(prev => prev.filter(rec => rec.uid !== recommendation.uid));
-                    }}
-                    className="bg-gray-500 text-white px-3 py-1 rounded flex items-center"
-                    disabled={loading}
-                  >
-                    <FaTimes className="mr-1" /> Ignore
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

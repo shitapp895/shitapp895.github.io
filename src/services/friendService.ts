@@ -110,7 +110,8 @@ function calculateRecommendations(
 export async function getFriendRecommendations(
   currentUserId: string, 
   limit = 5, 
-  maxFriendsToSample = 10
+  maxFriendsToSample = 10,
+  sentRequestIds: string[] = []
 ): Promise<RecommendedFriend[]> {
   try {
     // Get current user document
@@ -125,7 +126,11 @@ export async function getFriendRecommendations(
     // Check cache first
     const cachedRecommendations = getCachedRecommendations(allCurrentUserFriends);
     if (cachedRecommendations) {
-      return cachedRecommendations.slice(0, limit);
+      // Filter out users who have pending requests
+      const filteredRecommendations = cachedRecommendations.filter(
+        rec => !sentRequestIds.includes(rec.uid)
+      );
+      return filteredRecommendations.slice(0, limit);
     }
     
     // If no friends, return empty array
@@ -169,7 +174,7 @@ export async function getFriendRecommendations(
     
     // Fetch details for the top recommendations
     const topRecommendationIds = recommendations
-      .slice(0, limit)
+      .slice(0, limit * 2) // Get more than needed to allow filtering
       .map(rec => rec.uid);
     
     if (topRecommendationIds.length === 0) {
@@ -197,7 +202,12 @@ export async function getFriendRecommendations(
     // Build final recommendations with user details
     const finalRecommendations: RecommendedFriend[] = [];
     
-    for (const rec of recommendations.slice(0, limit)) {
+    for (const rec of recommendations) {
+      // Skip users with pending friend requests
+      if (sentRequestIds.includes(rec.uid)) {
+        continue;
+      }
+      
       const userDetails = userMap.get(rec.uid);
       if (userDetails) {
         finalRecommendations.push({
@@ -206,6 +216,11 @@ export async function getFriendRecommendations(
           email: userDetails.email,
           mutualFriends: rec.mutualFriends
         });
+        
+        // Stop once we have enough recommendations
+        if (finalRecommendations.length >= limit) {
+          break;
+        }
       }
     }
     
