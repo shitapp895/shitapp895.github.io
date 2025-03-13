@@ -373,15 +373,12 @@ const Friends = () => {
         // Remove from search results
         setSearchResults(prev => prev.filter(u => u.uid !== user.uid))
         
-        // Also remove from recommendations if it was sent to a recommended user
-        setRecommendations(prev => prev.filter(rec => rec.uid !== user.uid))
-        
         setSuccess(`Friend request sent to ${user.displayName}!`)
         
-        // Refresh recommendations after sending a request - silent refresh with 1-second delay
+        // Trigger the exact same action as clicking the refresh button after 4 seconds
         setTimeout(() => {
-          refreshRecommendations(false);
-        }, 1000);
+          refreshRecommendations(true, user.uid);
+        }, 4000);
       } catch (writeErr: any) {
         console.error('Error writing friend request to Firestore:', writeErr)
         if (writeErr.code === 'permission-denied') {
@@ -655,7 +652,7 @@ const Friends = () => {
   }
 
   // Refresh friend recommendations
-  const refreshRecommendations = async (showSuccessMessage = true) => {
+  const refreshRecommendations = async (showSuccessMessage = true, additionalRequestId?: string) => {
     if (!currentUser) return;
     
     try {
@@ -666,7 +663,12 @@ const Friends = () => {
       clearRecommendationsCache();
       
       // Get IDs of users with pending friend requests
-      const sentRequestIds = sentRequests.map(request => request.receiver);
+      let sentRequestIds = sentRequests.map(request => request.receiver);
+      
+      // Add the additional request ID if provided
+      if (additionalRequestId) {
+        sentRequestIds = [...sentRequestIds, additionalRequestId];
+      }
       
       // Fetch new recommendations
       const newRecommendations = await getFriendRecommendations(
@@ -794,14 +796,15 @@ const Friends = () => {
                   </button>
                   <button
                     onClick={() => {
-                      // First remove this recommendation
+                      // Remove this recommendation
                       ignoreRecommendation(recommendation.uid);
                       setRecommendations(prev => prev.filter(rec => rec.uid !== recommendation.uid));
                       
-                      // Then refresh recommendations to get new ones after a 1-second delay
+                      // No need to pass additionalRequestId for ignored recommendations
+                      // since they're not friend requests
                       setTimeout(() => {
-                        refreshRecommendations(false);
-                      }, 1000);
+                        refreshRecommendations(true);
+                      }, 4000);
                     }}
                     className="bg-gray-500 text-white px-3 py-1 rounded flex items-center"
                     disabled={loading}
