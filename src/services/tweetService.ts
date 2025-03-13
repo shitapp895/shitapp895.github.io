@@ -107,9 +107,18 @@ export async function getRecentTweetActivity(
     }
     
     // Sort all activities by timestamp (newest first)
-    allActivityDocs.sort((a, b) => 
-      b.timestamp.toMillis() - a.timestamp.toMillis()
-    );
+    allActivityDocs.sort((a, b) => {
+      // Safely handle timestamp comparison
+      const timeA = a.timestamp && typeof a.timestamp.toMillis === 'function' 
+        ? a.timestamp.toMillis() 
+        : (typeof a.timestamp === 'number' ? a.timestamp : 0);
+      
+      const timeB = b.timestamp && typeof b.timestamp.toMillis === 'function' 
+        ? b.timestamp.toMillis() 
+        : (typeof b.timestamp === 'number' ? b.timestamp : 0);
+      
+      return timeB - timeA;
+    });
     
     // Limit to 50 most recent activities overall
     return allActivityDocs.slice(0, 50);
@@ -153,11 +162,15 @@ export async function getTweetsByIds(tweetIds: string[]): Promise<Tweet[]> {
       // Convert to milliseconds for comparison
       const timeA = typeof a.createdAt === 'number' 
         ? a.createdAt 
-        : a.createdAt.toMillis();
+        : (a.createdAt && typeof a.createdAt.toMillis === 'function' 
+            ? a.createdAt.toMillis() 
+            : 0);
       
       const timeB = typeof b.createdAt === 'number' 
         ? b.createdAt 
-        : b.createdAt.toMillis();
+        : (b.createdAt && typeof b.createdAt.toMillis === 'function' 
+            ? b.createdAt.toMillis() 
+            : 0);
       
       return timeB - timeA;
     });
@@ -204,13 +217,18 @@ export async function getTimelineTweets(
       
       // Sort by date
       uniqueTweets.sort((a, b) => {
+        // Safely handle different timestamp formats
         const timeA = typeof a.createdAt === 'number' 
           ? a.createdAt 
-          : a.createdAt.toMillis();
+          : (a.createdAt && typeof a.createdAt.toMillis === 'function' 
+              ? a.createdAt.toMillis() 
+              : 0);
         
         const timeB = typeof b.createdAt === 'number' 
           ? b.createdAt 
-          : b.createdAt.toMillis();
+          : (b.createdAt && typeof b.createdAt.toMillis === 'function' 
+              ? b.createdAt.toMillis() 
+              : 0);
         
         return timeB - timeA;
       });
