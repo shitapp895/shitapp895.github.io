@@ -15,7 +15,6 @@ const Tweets = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newTweetContent, setNewTweetContent] = useState('');
-  const [isPublic, setIsPublic] = useState(false);
   const [posting, setPosting] = useState(false);
   const [friends, setFriends] = useState<string[]>([]);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | undefined>();
@@ -156,7 +155,7 @@ const Tweets = () => {
         authorId: currentUser.uid,
         authorName: userData?.displayName || 'Anonymous',
         content: newTweetContent.trim(),
-        isPublic,
+        isPublic: false,
         createdAt: Date.now()
       });
       
@@ -240,26 +239,7 @@ const Tweets = () => {
             
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-5 w-5 text-primary"
-                    checked={isPublic}
-                    onChange={() => setIsPublic(!isPublic)}
-                  />
-                  <span className="ml-2 text-sm flex items-center">
-                    {isPublic ? (
-                      <>
-                        <FaGlobeAmericas className="mr-1" /> Public
-                      </>
-                    ) : (
-                      <>
-                        <FaUserFriends className="mr-1" /> Friends only
-                      </>
-                    )}
-                  </span>
-                </label>
-                <div className="ml-4 text-sm text-gray-500">
+                <div className="text-sm text-gray-500">
                   {newTweetContent.length}/280
                 </div>
               </div>

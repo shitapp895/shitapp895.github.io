@@ -88,9 +88,7 @@ service cloud.firestore {
     // Tweets collection rules
     match /tweets/{tweetId} {
       allow read: if request.auth != null && (
-        // Allow reading public tweets
-        resource.data.isPublic == true ||
-        // Or if the user is the author
+        // Only allow if the user is the author
         resource.data.authorId == request.auth.uid ||
         // Or if the user is friends with the author
         exists(/databases/$(database)/documents/users/$(resource.data.authorId)/friends/$(request.auth.uid))
@@ -98,7 +96,8 @@ service cloud.firestore {
       
       // Allow creating a tweet if authenticated
       allow create: if request.auth != null && 
-                     request.resource.data.authorId == request.auth.uid;
+                     request.resource.data.authorId == request.auth.uid &&
+                     request.resource.data.isPublic == false;
       
       // Allow updating or deleting a tweet if you're the author
       allow update, delete: if request.auth != null && 
