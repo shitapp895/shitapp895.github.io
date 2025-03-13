@@ -22,7 +22,7 @@ const TWEETS_COLLECTION = 'tweets';
 const TWEETS_PER_PAGE = 5;
 
 // Create a new tweet
-export async function createTweet(tweet: Omit<Tweet, 'id' | 'likes' | 'likedBy'>): Promise<string> {
+export async function createTweet(tweet: Omit<Tweet, 'id' | 'likes' | 'likedBy' | 'createdAt'>): Promise<string> {
   try {
     const tweetData = {
       ...tweet,

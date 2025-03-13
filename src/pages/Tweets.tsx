@@ -155,8 +155,7 @@ const Tweets = () => {
         authorId: currentUser.uid,
         authorName: userData?.displayName || 'Anonymous',
         content: newTweetContent.trim(),
-        isPublic: false,
-        createdAt: Date.now()
+        isPublic: false
       });
       
       setNewTweetContent('');
