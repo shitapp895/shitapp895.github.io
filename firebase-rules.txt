@@ -87,12 +87,17 @@ service cloud.firestore {
     
     // Tweets collection rules
     match /tweets/{tweetId} {
+      // Helper function to check if users are friends
+      function areFriends(user1, user2) {
+        return get(/databases/$(database)/documents/users/$(user1)).data.friends.hasAny([user2]) ||
+               get(/databases/$(database)/documents/users/$(user2)).data.friends.hasAny([user1]);
+      }
+      
       allow read: if request.auth != null && (
         // Only allow if the user is the author
         resource.data.authorId == request.auth.uid ||
         // Or if the user is friends with the author
-        get(/databases/$(database)/documents/users/$(resource.data.authorId)).data.friends.hasAny([request.auth.uid]) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.friends.hasAny([resource.data.authorId])
+        areFriends(resource.data.authorId, request.auth.uid)
       );
       
       // Allow creating a tweet if authenticated
@@ -107,13 +112,34 @@ service cloud.firestore {
       // Allow friends to update only the likes and likedBy fields
       allow update: if request.auth != null && 
                      resource.data.authorId != request.auth.uid &&
-                     (
-                       // Check if the current user is in the author's friends array
-                       get(/databases/$(database)/documents/users/$(resource.data.authorId)).data.friends.hasAny([request.auth.uid]) ||
-                       // Or if the author is in the current user's friends array
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.friends.hasAny([resource.data.authorId])
-                     ) &&
+                     areFriends(resource.data.authorId, request.auth.uid) &&
                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy']);
+    }
+    
+    // New tweet activity collection rules
+    match /tweetActivity/{activityId} {
+      // Helper function to check if users are friends
+      function areFriends(user1, user2) {
+        return get(/databases/$(database)/documents/users/$(user1)).data.friends.hasAny([user2]) ||
+               get(/databases/$(database)/documents/users/$(user2)).data.friends.hasAny([user1]);
+      }
+      
+      // Allow reading if the user is the one who created the activity or is friends with that user
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        areFriends(resource.data.userId, request.auth.uid)
+      );
+      
+      // Only the user can create their own activity
+      allow create: if request.auth != null && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Activities should generally not be updated, only created or deleted
+      allow update: if false;
+      
+      // Only the user who created the activity can delete it
+      allow delete: if request.auth != null && 
+                     resource.data.userId == request.auth.uid;
     }
   }
 }
