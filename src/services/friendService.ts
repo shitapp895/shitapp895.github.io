@@ -250,4 +250,13 @@ export function ignoreRecommendation(recommendationId: string): void {
   } catch (error) {
     console.error('Error ignoring recommendation:', error);
   }
+}
+
+// Add a function to clear the recommendations cache
+export function clearRecommendationsCache(): void {
+  try {
+    localStorage.removeItem(RECOMMENDATIONS_CACHE_KEY);
+  } catch (error) {
+    console.error('Error clearing recommendations cache:', error);
+  }
 } 

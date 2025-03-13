@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { FaUserFriends, FaSearch, FaUserPlus, FaTrash, FaCheck, FaTimes, FaUserCircle } from 'react-icons/fa'
+import { FaUserFriends, FaSearch, FaUserPlus, FaTrash, FaCheck, FaTimes, FaUserCircle, FaSync } from 'react-icons/fa'
 import { 
   collection, 
   query, 
@@ -16,7 +16,7 @@ import {
   writeBatch
 } from 'firebase/firestore'
 import { firestore } from '../firebase/config'
-import { getFriendRecommendations, ignoreRecommendation, RecommendedFriend } from '../services/friendService'
+import { getFriendRecommendations, ignoreRecommendation, clearRecommendationsCache, RecommendedFriend } from '../services/friendService'
 
 interface User {
   uid: string
@@ -105,9 +105,6 @@ const Friends = () => {
           setFriends([])
         }
 
-        // Initialize with empty list
-        let sentRequestIds: string[] = [];
-
         // Try to fetch friend requests, but don't fail if collection doesn't exist
         try {
           // Fetch sent friend requests
@@ -136,9 +133,6 @@ const Friends = () => {
               createdAt: data.createdAt.toDate()
             })
           })
-
-          // Extract receiver IDs from sent requests for filtering recommendations
-          sentRequestIds = sentRequestsList.map(request => request.receiver);
           
           setSentRequests(sentRequestsList)
           
@@ -187,8 +181,11 @@ const Friends = () => {
           setReceivedRequests([])
         }
         
-        // Fetch friend recommendations - now using the sentRequestIds from outside the try block
+        // Fetch friend recommendations
         try {
+          // Get IDs of users with pending friend requests
+          const sentRequestIds = sentRequests.map((request: FriendRequest) => request.receiver);
+          
           const recommendations = await getFriendRecommendations(
             currentUser.uid, 
             5, 
@@ -649,6 +646,43 @@ const Friends = () => {
     }
   }
 
+  // Refresh friend recommendations
+  const refreshRecommendations = async () => {
+    if (!currentUser) return;
+    
+    try {
+      setLoading(true);
+      setError('');
+      
+      // Clear the cache to force a fresh fetch
+      clearRecommendationsCache();
+      
+      // Get IDs of users with pending friend requests
+      const sentRequestIds = sentRequests.map(request => request.receiver);
+      
+      // Fetch new recommendations
+      const newRecommendations = await getFriendRecommendations(
+        currentUser.uid,
+        5,
+        10,
+        sentRequestIds
+      );
+      
+      setRecommendations(newRecommendations);
+      setSuccess('Friend recommendations refreshed!');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+    } catch (err: any) {
+      console.error('Error refreshing recommendations:', err);
+      setError('Failed to refresh recommendations: ' + (err.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6 flex items-center">
@@ -714,7 +748,16 @@ const Friends = () => {
       {/* Friend Recommendations */}
       {recommendations.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">People You May Know</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">People You May Know</h2>
+            <button 
+              onClick={refreshRecommendations}
+              className="bg-blue-500 text-white px-3 py-1 rounded flex items-center text-sm"
+              disabled={loading}
+            >
+              <FaSync className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
           <div className="space-y-2">
             {recommendations.map(recommendation => (
               <div key={recommendation.uid} className="border p-3 rounded flex justify-between items-center">
@@ -751,6 +794,23 @@ const Friends = () => {
               </div>
             ))}
           </div>
+        </div>
+      )}
+      
+      {/* Friend Recommendations - Empty State */}
+      {recommendations.length === 0 && (
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">People You May Know</h2>
+            <button 
+              onClick={refreshRecommendations}
+              className="bg-blue-500 text-white px-3 py-1 rounded flex items-center text-sm"
+              disabled={loading}
+            >
+              <FaSync className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+          <p className="text-gray-500">No recommendations available. Try adding more friends or refreshing.</p>
         </div>
       )}
       
