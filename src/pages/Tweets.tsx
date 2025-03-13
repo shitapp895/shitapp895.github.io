@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FaHeart, FaRegHeart, FaTrash, FaPlus, FaGlobeAmericas, FaUserFriends } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaTrash, FaPlus } from 'react-icons/fa';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 
 import { useAuth } from '../contexts/AuthContext';
