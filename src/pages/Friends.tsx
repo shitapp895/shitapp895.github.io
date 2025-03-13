@@ -373,7 +373,13 @@ const Friends = () => {
         // Remove from search results
         setSearchResults(prev => prev.filter(u => u.uid !== user.uid))
         
+        // Also remove from recommendations if it was sent to a recommended user
+        setRecommendations(prev => prev.filter(rec => rec.uid !== user.uid))
+        
         setSuccess(`Friend request sent to ${user.displayName}!`)
+        
+        // Refresh recommendations after sending a request - silent refresh
+        await refreshRecommendations(false)
       } catch (writeErr: any) {
         console.error('Error writing friend request to Firestore:', writeErr)
         if (writeErr.code === 'permission-denied') {
@@ -647,7 +653,7 @@ const Friends = () => {
   }
 
   // Refresh friend recommendations
-  const refreshRecommendations = async () => {
+  const refreshRecommendations = async (showSuccessMessage = true) => {
     if (!currentUser) return;
     
     try {
@@ -669,12 +675,16 @@ const Friends = () => {
       );
       
       setRecommendations(newRecommendations);
-      setSuccess('Friend recommendations refreshed!');
       
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
+      // Only show success message if requested
+      if (showSuccessMessage) {
+        setSuccess('Friend recommendations refreshed!');
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setSuccess('');
+        }, 3000);
+      }
     } catch (err: any) {
       console.error('Error refreshing recommendations:', err);
       setError('Failed to refresh recommendations: ' + (err.message || 'Unknown error'));
@@ -751,7 +761,7 @@ const Friends = () => {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">People You May Know</h2>
             <button 
-              onClick={refreshRecommendations}
+              onClick={() => refreshRecommendations(true)}
               className="bg-blue-500 text-white px-3 py-1 rounded flex items-center text-sm"
               disabled={loading}
             >
@@ -781,9 +791,13 @@ const Friends = () => {
                     <FaUserPlus className="mr-1" /> Send
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      // First remove this recommendation
                       ignoreRecommendation(recommendation.uid);
                       setRecommendations(prev => prev.filter(rec => rec.uid !== recommendation.uid));
+                      
+                      // Then refresh recommendations to get new ones - silent refresh
+                      await refreshRecommendations(false);
                     }}
                     className="bg-gray-500 text-white px-3 py-1 rounded flex items-center"
                     disabled={loading}
@@ -803,7 +817,7 @@ const Friends = () => {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">People You May Know</h2>
             <button 
-              onClick={refreshRecommendations}
+              onClick={() => refreshRecommendations(true)}
               className="bg-blue-500 text-white px-3 py-1 rounded flex items-center text-sm"
               disabled={loading}
             >
