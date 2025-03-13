@@ -229,7 +229,7 @@ const Tweets = () => {
         <div className="bg-gray-50 p-4 rounded-lg mb-6">
           <form onSubmit={handlePostTweet}>
             <textarea
-              className="w-full p-3 border rounded mb-3"
+              className="w-full p-3 border rounded mb-3 text-gray-900 placeholder-gray-500"
               placeholder="What's happening?"
               value={newTweetContent}
               onChange={e => setNewTweetContent(e.target.value)}
