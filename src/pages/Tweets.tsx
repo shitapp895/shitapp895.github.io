@@ -9,6 +9,37 @@ import { getTimelineTweets, createTweet, toggleLikeTweet, deleteTweet } from '..
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
 
+// Helper function to safely format tweet dates
+const formatTweetDate = (createdAt: any): string => {
+  try {
+    // If it's a Firestore Timestamp with toDate method
+    if (createdAt && typeof createdAt.toDate === 'function') {
+      return new Date(createdAt.toDate()).toLocaleString();
+    }
+    
+    // If it's a number (milliseconds)
+    if (typeof createdAt === 'number') {
+      return new Date(createdAt).toLocaleString();
+    }
+    
+    // If it's a Date object
+    if (createdAt instanceof Date) {
+      return createdAt.toLocaleString();
+    }
+    
+    // If it's a string that can be parsed as a date
+    if (typeof createdAt === 'string') {
+      return new Date(createdAt).toLocaleString();
+    }
+    
+    // Fallback
+    return 'Unknown date';
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+};
+
 const Tweets = () => {
   const { currentUser, userData } = useAuth();
   const [tweets, setTweets] = useState<Tweet[]>([]);
@@ -280,9 +311,7 @@ const Tweets = () => {
                 <div className="flex justify-between">
                   <div className="font-bold">{tweet.authorName}</div>
                   <div className="text-gray-500 text-sm">
-                    {typeof tweet.createdAt === 'number'
-                      ? new Date(tweet.createdAt).toLocaleString()
-                      : new Date(tweet.createdAt.toDate()).toLocaleString()}
+                    {formatTweetDate(tweet.createdAt)}
                   </div>
                 </div>
                 
