@@ -12,9 +12,14 @@ import { firestore } from '../firebase/config';
 // Helper function to safely format tweet dates
 const formatTweetDate = (createdAt: any): string => {
   try {
+    console.log('Tweet createdAt type:', typeof createdAt, createdAt);
+    
+    // Handle null or undefined
+    if (!createdAt) return 'Unknown date';
+    
     // If it's a Firestore Timestamp with toDate method
-    if (createdAt && typeof createdAt.toDate === 'function') {
-      return new Date(createdAt.toDate()).toLocaleString();
+    if (typeof createdAt === 'object' && createdAt !== null && typeof createdAt.toDate === 'function') {
+      return createdAt.toDate().toLocaleString();
     }
     
     // If it's a number (milliseconds)
@@ -32,10 +37,10 @@ const formatTweetDate = (createdAt: any): string => {
       return new Date(createdAt).toLocaleString();
     }
     
-    // Fallback
-    return 'Unknown date';
+    // Fallback - just convert to string
+    return String(createdAt);
   } catch (error) {
-    console.error('Error formatting date:', error);
+    console.error('Error formatting date:', error, 'Value was:', createdAt);
     return 'Invalid date';
   }
 };
