@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { FaUserFriends, FaSearch, FaUserPlus, FaTrash, FaCheck, FaTimes, FaUserCircle, FaSync } from 'react-icons/fa'
+import { FaUserFriends, FaSearch, FaUserPlus, FaTrash, FaCheck, FaTimes, FaSync } from 'react-icons/fa'
 import { 
   collection, 
   query, 
