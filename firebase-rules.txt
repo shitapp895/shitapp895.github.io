@@ -91,7 +91,8 @@ service cloud.firestore {
         // Only allow if the user is the author
         resource.data.authorId == request.auth.uid ||
         // Or if the user is friends with the author
-        exists(/databases/$(database)/documents/users/$(resource.data.authorId)/friends/$(request.auth.uid))
+        get(/databases/$(database)/documents/users/$(resource.data.authorId)).data.friends.hasAny([request.auth.uid]) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.friends.hasAny([resource.data.authorId])
       );
       
       // Allow creating a tweet if authenticated
@@ -106,8 +107,12 @@ service cloud.firestore {
       // Allow friends to update only the likes and likedBy fields
       allow update: if request.auth != null && 
                      resource.data.authorId != request.auth.uid &&
-                     (exists(/databases/$(database)/documents/users/$(resource.data.authorId)/friends/$(request.auth.uid)) ||
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(resource.data.authorId))) &&
+                     (
+                       // Check if the current user is in the author's friends array
+                       get(/databases/$(database)/documents/users/$(resource.data.authorId)).data.friends.hasAny([request.auth.uid]) ||
+                       // Or if the author is in the current user's friends array
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.friends.hasAny([resource.data.authorId])
+                     ) &&
                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy']);
     }
   }
