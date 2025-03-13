@@ -105,6 +105,9 @@ const Friends = () => {
           setFriends([])
         }
 
+        // Initialize with empty list
+        let sentRequestIds: string[] = [];
+
         // Try to fetch friend requests, but don't fail if collection doesn't exist
         try {
           // Fetch sent friend requests
@@ -133,6 +136,9 @@ const Friends = () => {
               createdAt: data.createdAt.toDate()
             })
           })
+
+          // Extract receiver IDs from sent requests for filtering recommendations
+          sentRequestIds = sentRequestsList.map(request => request.receiver);
           
           setSentRequests(sentRequestsList)
           
@@ -181,11 +187,8 @@ const Friends = () => {
           setReceivedRequests([])
         }
         
-        // Fetch friend recommendations
+        // Fetch friend recommendations - now using the sentRequestIds from outside the try block
         try {
-          // Get IDs of users with pending friend requests
-          const sentRequestIds = sentRequests.map((request: FriendRequest) => request.receiver);
-          
           const recommendations = await getFriendRecommendations(
             currentUser.uid, 
             5, 
