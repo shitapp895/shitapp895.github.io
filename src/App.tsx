@@ -12,6 +12,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Profile from './pages/Profile'
 import Friends from './pages/Friends'
+import Tweets from './pages/Tweets'
 import NotFound from './pages/NotFound'
 
 // Context
@@ -45,6 +46,7 @@ function App() {
             <Route index element={<Home />} />
             <Route path="profile" element={<Profile />} />
             <Route path="friends" element={<Friends />} />
+            <Route path="tweets" element={<Tweets />} />
           </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

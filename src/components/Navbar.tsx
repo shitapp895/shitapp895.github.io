@@ -1,4 +1,4 @@
-import { FaToilet, FaUser, FaUserFriends, FaSignOutAlt } from 'react-icons/fa';
+import { FaToilet, FaUser, FaUserFriends, FaSignOutAlt, FaTwitter } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +35,10 @@ const Navbar = () => {
             <div className="flex items-center space-x-4">
               <Link to="/friends" className="text-gray-600 dark:text-gray-300 hover:text-primary">
                 <FaUserFriends className="text-xl" />
+              </Link>
+
+              <Link to="/tweets" className="text-gray-600 dark:text-gray-300 hover:text-primary">
+                <FaTwitter className="text-xl" />
               </Link>
 
               <Link to="/profile" className="text-gray-600 dark:text-gray-300 hover:text-primary">
