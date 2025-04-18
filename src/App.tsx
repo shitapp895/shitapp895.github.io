@@ -14,6 +14,7 @@ import Profile from './pages/Profile'
 import Friends from './pages/Friends'
 import Tweets from './pages/Tweets'
 import NotFound from './pages/NotFound'
+import Careers from './pages/Careers'
 
 // Context
 import { AuthProvider } from './contexts/AuthContext'
@@ -47,6 +48,7 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="friends" element={<Friends />} />
             <Route path="tweets" element={<Tweets />} />
+            <Route path="careers" element={<Careers />} />
           </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
